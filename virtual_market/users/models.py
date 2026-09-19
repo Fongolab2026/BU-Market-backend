@@ -11,8 +11,8 @@ class User(AbstractUser):
         SELLER = "seller","Seller"
 
     role = models.CharField(choices=Role.choices, default=Role.BUYER)
-    phone = models.CharField( max_length=20)
-    adresse = models.CharField(max_length=200)
+    phone = models.CharField(max_length=20, blank=True, default="")
+    adresse = models.CharField(max_length=200, blank=True, default="")
     profile_pic = models.ImageField(upload_to="image/", blank=True, null=True)
     is_active = models.BooleanField( default=True)
     is_staff = models.BooleanField(default=False)

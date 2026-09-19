@@ -1,7 +1,7 @@
 from django.shortcuts import render
-from .models import Products, Categories
+from .models import Product, Category
 from rest_framework import viewsets
-from .serializers import ProductsSerializer, CategoriesSerializer
+from .serializers import ProductSerializer, CategorySerializer
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from users.permisions import IsAdmin,IsBuyer,IsSeller,IsSuperAdmin
@@ -11,8 +11,8 @@ class ProductPagination(PageNumberPagination):
     page_size = 20
 
 class ProductsView(viewsets.ModelViewSet):
-    queryset = Products.objects.all()
-    serializer_class = ProductsSerializer
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
     pagination_class = ProductPagination
     # ordering = "name"
 
@@ -46,7 +46,7 @@ class ProductsView(viewsets.ModelViewSet):
     
 
 class CategoriesView(viewsets.ModelViewSet):
-    queryset = Categories.objects.all()
-    serializer_class = CategoriesSerializer
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
 
 
