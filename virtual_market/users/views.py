@@ -1,4 +1,3 @@
-from django.shortcuts import render
 from .serializer import UserSerializer
 from .models import User
 from rest_framework import viewsets

@@ -2,7 +2,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from users.permisions import IsAdmin, IsSuperAdmin
+from users.permisions import IsAdminOrSuperAdmin
 from .models import Notification
 from .serializers import NotificationSerializer
 
@@ -10,6 +10,13 @@ from .serializers import NotificationSerializer
 class NotificationViewSet(viewsets.ModelViewSet):
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ("create", "update", "partial_update", "destroy"):
+            permission_classes = [IsAdminOrSuperAdmin]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
 
     def get_queryset(self):
         user = self.request.user

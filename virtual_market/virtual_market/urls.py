@@ -15,18 +15,20 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path,include
+from django.urls import path, include
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from .views import ApiRootView
 
 urlpatterns = [
+    path('api/', ApiRootView.as_view(), name="api-root"),
+    path('api/', include('products.urls')),
+    path('api/', include('users.urls')),
+    path('api/', include('messages.urls')),
+    path('api/', include('categorie.urls')),
+    path('api/', include('panier.urls')),
+    path('api/', include('commande.urls')),
+    path('api/', include('notification.urls')),
+    path('api/schema/', SpectacularAPIView.as_view(), name="schema"),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
     path('admin/', admin.site.urls),
-    path('products/', include('products.urls')),
-    path('users/', include('users.urls')),
-    path('messages/', include('messages.urls')),
-    path('categories/', include('categorie.urls')),
-    path('paniers/', include('panier.urls')),
-    path('commandes/', include('commande.urls')),
-    path('notifications/', include('notification.urls')),
-    path('api/schema/', SpectacularAPIView.as_view(), name = "schema"),
-    path('api/docs/', SpectacularSwaggerView.as_view(url_name = "schema"), name = "swagger-ui")
 ]
