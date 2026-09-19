@@ -31,6 +31,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+        read_only_fields = ["user"]
 
     def get_total_price(self, obj):
         return obj.total_price
