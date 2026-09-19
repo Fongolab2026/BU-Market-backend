@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'categorie',
     'panier',
     'commande',
+    'notification',
 ]
 
 MIDDLEWARE = [
