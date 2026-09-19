@@ -3,8 +3,8 @@ from .models import Product
 from rest_framework import viewsets
 from .serializers import ProductSerializer
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import IsAuthenticated
-from users.permisions import IsAdmin,IsBuyer,IsSeller,IsSuperAdmin
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from users.permisions import IsAdmin, IsSeller, IsSuperAdmin
 
 # Create your views here.
 class ProductPagination(PageNumberPagination):
@@ -23,15 +23,15 @@ class ProductsView(viewsets.ModelViewSet):
         return serializer
 
     def get_permissions(self):
-        if self.action == 'destroy':
+        if self.action in ('destroy', 'update', 'partial_update'):
             permission_classes = [IsSeller, IsAdmin, IsSuperAdmin]
 
-        elif self.action == 'update':
-            permission_classes = [IsSeller, IsAdmin, IsSuperAdmin]
+        elif self.action == 'create':
+            permission_classes = [IsAuthenticated]
 
         else:
             permission_classes = [
-                IsAuthenticated
+                AllowAny
             ]
         return [
             permission()
