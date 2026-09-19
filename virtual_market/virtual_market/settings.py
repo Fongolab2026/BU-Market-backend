@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'panier',
     'commande',
     'notification',
+    'favoris',
 ]
 
 MIDDLEWARE = [

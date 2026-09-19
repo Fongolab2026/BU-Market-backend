@@ -20,6 +20,7 @@ class ApiRootView(APIView):
                 "order_items": base + "api/order-items/",
                 "messages": base + "api/messages/",
                 "notifications": base + "api/notifications/",
+                "favorites": base + "api/favorites/",
                 "schema": base + "api/schema/",
                 "docs": base + "api/docs/",
                 "admin": base + "admin/",
