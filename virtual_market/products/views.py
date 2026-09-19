@@ -1,7 +1,7 @@
 from django.shortcuts import render
-from .models import Product, Category
+from .models import Product
 from rest_framework import viewsets
-from .serializers import ProductSerializer, CategorySerializer
+from .serializers import ProductSerializer
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from users.permisions import IsAdmin,IsBuyer,IsSeller,IsSuperAdmin
@@ -38,15 +38,5 @@ class ProductsView(viewsets.ModelViewSet):
             for permission in permission_classes    
 
         ]
-            
-
-    
-        
-
-    
-
-class CategoriesView(viewsets.ModelViewSet):
-    queryset = Category.objects.all()
-    serializer_class = CategorySerializer
 
 
