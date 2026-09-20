@@ -8,10 +8,11 @@ from users.permisions import IsProductOwnerOrAdmin
 
 # Create your views here.
 class ProductPagination(PageNumberPagination):
-    page_size = 20
+    page_size = 30
+    page_size_query_param = 'page_size'
 
 class ProductsView(viewsets.ModelViewSet):
-    queryset = Product.objects.all()
+    queryset = Product.objects.all().order_by('id')
     serializer_class = ProductSerializer
     pagination_class = ProductPagination
     # ordering = "name"
