@@ -1,30 +1,49 @@
+from django.db.models import Q
 from django.shortcuts import render
 from .models import Product
 from rest_framework import viewsets
+from rest_framework.decorators import action
 from .serializers import ProductSerializer
-from rest_framework.pagination import PageNumberPagination
+from admin.pagination import AdminPageNumberPagination
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from users.permisions import IsProductOwnerOrAdmin
+from rest_framework.response import Response
+from users.permisions import IsProductOwnerOrAdmin, IsAdminOrSuperAdmin
 
 # Create your views here.
-class ProductPagination(PageNumberPagination):
+class ProductPagination(AdminPageNumberPagination):
     page_size = 30
-    page_size_query_param = 'page_size'
 
 class ProductsView(viewsets.ModelViewSet):
-    queryset = Product.objects.all().order_by('id')
+    queryset = Product.objects.all().order_by("name")
     serializer_class = ProductSerializer
     pagination_class = ProductPagination
-    # ordering = "name"
+    ordering = "name"
+
+    def get_queryset(self):
+        qs = super().get_queryset().select_related("owner", "category")
+        search = self.request.query_params.get("search")
+        status = self.request.query_params.get("status")
+        if search:
+            qs = qs.filter(Q(name__icontains=search) | Q(details__icontains=search))
+        if status:
+            qs = qs.filter(status=status)
+        return qs
 
     def perform_create(self, serializer):
-        serializer.save(
-            owner=self.request.user
-        )
+        serializer.save(owner=self.request.user)
         return serializer
 
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.views += 1
+        instance.save(update_fields=["views"])
+        return super().retrieve(request, *args, **kwargs)
+
     def get_permissions(self):
-        if self.action in ('destroy', 'update', 'partial_update'):
+        if self.action == "set_status":
+            permission_classes = [IsAdminOrSuperAdmin]
+
+        elif self.action in ('destroy', 'update', 'partial_update'):
             permission_classes = [IsProductOwnerOrAdmin]
 
         elif self.action == 'create':
@@ -40,4 +59,9 @@ class ProductsView(viewsets.ModelViewSet):
 
         ]
 
-
+    @action(detail=True, methods=["patch"], url_path="status")
+    def set_status(self, request, pk=None):
+        product = self.get_object()
+        product.status = request.data.get("status", product.status)
+        product.save()
+        return Response(self.get_serializer(product).data)

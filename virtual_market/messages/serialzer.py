@@ -15,11 +15,12 @@ class MessagesSerializer(serializers.ModelSerializer):
             'receiver_username',
             'content',
             'timestamp',
+            'is_read',
             'is_edited',
             'edited_at',
         ]
         # The sender is always the authenticated user, never taken from the payload.
-        read_only_fields = ['id', 'sender', 'timestamp', 'is_edited', 'edited_at']
+        read_only_fields = ['id', 'sender', 'timestamp', 'is_read', 'is_edited', 'edited_at']
 
     def validate_content(self, value):
         if not value.strip():
@@ -31,4 +32,3 @@ class MessagesSerializer(serializers.ModelSerializer):
         if request and request.user == value:
             raise serializers.ValidationError("You cannot send a message to yourself.")
         return value
-

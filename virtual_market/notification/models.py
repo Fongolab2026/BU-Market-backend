@@ -8,6 +8,9 @@ class Notification(models.Model):
         PRODUCT = "product", "Produit"
         SYSTEM = "system", "Système"
         PROMOTION = "promotion", "Promotion"
+        SHOP = "shop", "Boutique"
+        ALERT = "alert", "Alerte"
+        MESSAGE = "message", "Message"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

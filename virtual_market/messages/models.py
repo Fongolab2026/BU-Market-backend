@@ -7,6 +7,7 @@ class Message(models.Model):
     receiver = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='received_messages')
     content = models.TextField()
     timestamp = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
     # Each edit is flagged so the receiver can see the message was changed
     # after it was sent (same convention as Telegram/WhatsApp).
     is_edited = models.BooleanField(default=False)

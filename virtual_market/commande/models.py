@@ -6,7 +6,7 @@ from products.models import Product
 class Order(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "En attente"
-        CONFIRMED = "confirmed", "Confirmée"
+        SHIPPED = "shipped", "Expédiée"
         COMPLETED = "completed", "Livrée"
         CANCELLED = "cancelled", "Annulée"
 
