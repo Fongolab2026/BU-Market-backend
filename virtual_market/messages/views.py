@@ -95,3 +95,58 @@ class MessagesView(viewsets.ModelViewSet):
             return self.get_paginated_response(serializer.data)
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='conversations')
+    def conversations(self, request):
+        """Conversations admin↔interlocuteur : {id, sender, shop, avatar, message, time, unread, status}."""
+        user = request.user
+        partners = (
+            User.objects.filter(
+                Q(sent_messages__receiver=user) | Q(received_messages__sender=user)
+            ).distinct()
+        )
+        result = []
+        for partner in partners:
+            thread = (
+                Message.objects.filter(
+                    Q(sender=user, receiver=partner) | Q(sender=partner, receiver=user)
+                ).order_by('-timestamp')
+            )
+            last = thread.first()
+            unread = thread.filter(receiver=user, is_read=False).count()
+            result.append({
+                "id": partner.id,
+                "sender": partner.username,
+                "shop": partner.shop_display_name,
+                "avatar": partner.profile_pic.url if partner.profile_pic else None,
+                "message": last.content if last else "",
+                "time": last.timestamp.isoformat() if last else None,
+                "unread": unread,
+                "status": "open" if unread else "closed",
+            })
+        return Response(result)
+
+    @action(detail=True, methods=['patch'], url_path='read')
+    def mark_conversation_read(self, request, pk=None):
+        partner = get_object_or_404(User, pk=pk)
+        Message.objects.filter(sender=partner, receiver=request.user, is_read=False).update(
+            is_read=True
+        )
+        return Response({"detail": "Conversation marquée comme lue."})
+
+    @action(detail=False, methods=['patch'], url_path='read-all')
+    def read_all(self, request):
+        Message.objects.filter(receiver=request.user, is_read=False).update(is_read=True)
+        return Response({"detail": "Tous les messages sont marqués comme lus."})
+
+    @action(detail=False, methods=['post'], url_path='send')
+    def send(self, request):
+        serializer = self.get_serializer(
+            data={
+                "receiver": request.data.get("recipient_id"),
+                "content": request.data.get("content"),
+            }
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save(sender=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)

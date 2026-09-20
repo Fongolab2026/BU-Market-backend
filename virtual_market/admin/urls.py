@@ -11,4 +11,6 @@ urlpatterns = [
         name="admin-moderation-queue",
     ),
     path("admin/meta/", views.AdminMetaView.as_view(), name="admin-meta"),
+    path("settings/", views.PlatformSettingsView.as_view(), name="platform-settings"),
+    path("admin/settings/", views.PlatformSettingsView.as_view(), name="admin-settings"),
 ]

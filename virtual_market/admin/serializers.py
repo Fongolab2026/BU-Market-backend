@@ -1,4 +1,6 @@
 from rest_framework import serializers
+from categorie.models import Category
+from .models import PlatformSettings
 
 
 class ModerationItemSerializer(serializers.Serializer):
@@ -16,3 +18,29 @@ class ModerationItemSerializer(serializers.Serializer):
 
     def get_status(self, obj):
         return "pending"
+
+
+class PlatformSettingsSerializer(serializers.ModelSerializer):
+    platformName = serializers.CharField(source="platform_name")
+    supportEmail = serializers.EmailField(source="support_email")
+    defaultLanguage = serializers.CharField(source="default_language")
+    categories = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PlatformSettings
+        fields = [
+            "platformName",
+            "supportEmail",
+            "phone",
+            "defaultLanguage",
+            "currency",
+            "moderation",
+            "notifications",
+            "categories",
+        ]
+
+    def get_categories(self, obj):
+        return [
+            {"id": category.id, "name": category.name, "count": category.products.count()}
+            for category in Category.objects.all().order_by("name")
+        ]

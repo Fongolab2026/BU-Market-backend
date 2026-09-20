@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from django.utils import timezone
-from rest_framework.generics import ListAPIView
+from rest_framework.generics import ListAPIView, RetrieveUpdateAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -12,8 +12,9 @@ from products.models import Product
 from users.models import User
 from users.permisions import IsAdminOrSuperAdmin
 
+from .models import PlatformSettings
 from .pagination import AdminPageNumberPagination
-from .serializers import ModerationItemSerializer
+from .serializers import ModerationItemSerializer, PlatformSettingsSerializer
 
 
 def _percent_change(current, previous):
@@ -203,3 +204,14 @@ class AdminMetaView(APIView):
                 },
             }
         )
+
+
+class PlatformSettingsView(RetrieveUpdateAPIView):
+    """GET/PATCH /api/admin/settings/ — paramètres de la plateforme."""
+
+    permission_classes = [IsAdminOrSuperAdmin]
+    serializer_class = PlatformSettingsSerializer
+    queryset = PlatformSettings.objects.all()
+
+    def get_object(self):
+        return PlatformSettings.load()

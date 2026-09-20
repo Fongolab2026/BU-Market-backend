@@ -5,6 +5,10 @@ from products.models import Product
 
 
 class Favorite(models.Model):
+    class Status(models.TextChoices):
+        VISIBLE = "visible", "Visible"
+        HIDDEN = "hidden", "Masqué"
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -19,6 +23,12 @@ class Favorite(models.Model):
         default=1,
         validators=[MinValueValidator(1), MaxValueValidator(5)],
         help_text="Note en étoiles de 1 à 5",
+    )
+    comment = models.TextField(blank=True, default="")
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.VISIBLE,
     )
     created_at = models.DateTimeField(auto_now_add=True)
 

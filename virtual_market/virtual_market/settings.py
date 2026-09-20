@@ -49,6 +49,8 @@ INSTALLED_APPS = [
     'notification',
     'favoris',
     'admin',
+    'shops',
+    'publications',
 ]
 
 MIDDLEWARE = [
