@@ -2,19 +2,19 @@ from django.shortcuts import render
 from .models import Product
 from rest_framework import viewsets
 from .serializers import ProductSerializer
-from rest_framework.pagination import PageNumberPagination
+from admin.pagination import AdminPageNumberPagination
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from users.permisions import IsProductOwnerOrAdmin
 
 # Create your views here.
-class ProductPagination(PageNumberPagination):
+class ProductPagination(AdminPageNumberPagination):
     page_size = 20
 
 class ProductsView(viewsets.ModelViewSet):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     pagination_class = ProductPagination
-    # ordering = "name"
+    ordering = "name"
 
     def perform_create(self, serializer):
         serializer.save(

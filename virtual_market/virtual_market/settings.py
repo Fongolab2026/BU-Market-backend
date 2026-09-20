@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'commande',
     'notification',
     'favoris',
+    'admin',
 ]
 
 MIDDLEWARE = [
@@ -143,6 +144,7 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
+    "DEFAULT_PAGINATION_CLASS": "admin.pagination.AdminPageNumberPagination",
 }
 
 SPECTACULAR_SETTINGS = {
