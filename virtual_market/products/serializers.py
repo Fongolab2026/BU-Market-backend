@@ -51,7 +51,8 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def get_main_image(self, obj):
         request = self.context.get("request")
-        main = obj.images.filter(is_main=True).first() or obj.images.first()
+        images = obj.images.all()
+        main = next((img for img in images if img.is_main), None) or images[0] if images else None
         url = main.image.url if main else None
         if url and request is not None:
             return request.build_absolute_uri(url)
