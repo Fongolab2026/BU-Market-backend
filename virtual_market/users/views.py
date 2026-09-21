@@ -59,6 +59,17 @@ class UserViewset(viewsets.ModelViewSet):
             for permission in permission_classes
         ]
 
+    @action(detail=False, methods=["get", "patch"], url_path="me")
+    def me(self, request):
+        if not request.user.is_authenticated:
+            return Response({"detail": "Non authentifié."}, status=401)
+        if request.method == "PATCH":
+            serializer = self.get_serializer(request.user, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+        return Response(self.get_serializer(request.user).data)
+
     @action(detail=True, methods=["patch"], url_path="status")
     def set_status(self, request, pk=None):
         user = self.get_object()
