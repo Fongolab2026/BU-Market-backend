@@ -80,3 +80,7 @@ class UserViewset(viewsets.ModelViewSet):
             user.is_active = True
         user.save()
         return Response(AdminUserSerializer(user).data)
+
+    @action(detail=False, methods=["get"], url_path="me", permission_classes=[IsAuthenticated])
+    def me(self, request):
+        return Response(UserSerializer(request.user).data)
