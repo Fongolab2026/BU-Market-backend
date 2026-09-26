@@ -34,7 +34,6 @@ class UserViewset(viewsets.ModelViewSet):
                 Q(username__icontains=search)
                 | Q(email__icontains=search)
                 | Q(first_name__icontains=search)
-                | Q(last_name__icontains=search)
             )
         if role:
             qs = qs.filter(role=role)

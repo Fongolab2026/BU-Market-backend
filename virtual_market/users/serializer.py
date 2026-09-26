@@ -17,7 +17,6 @@ class UserSerializer(serializers.ModelSerializer):
             "username",
             "email",
             "first_name",
-            "last_name",
             "phone",
             "adresse",
             "profile_pic",
@@ -49,7 +48,6 @@ class AdminUserSerializer(serializers.ModelSerializer):
 
     id = serializers.IntegerField(read_only=True)
     firstName = serializers.CharField(source="first_name")
-    lastName = serializers.CharField(source="last_name")
     joinedAt = serializers.DateTimeField(source="date_joined", read_only=True)
     lastActive = serializers.DateTimeField(source="last_active", read_only=True)
     location = serializers.CharField(source="adresse", required=False, allow_blank=True)
@@ -63,7 +61,6 @@ class AdminUserSerializer(serializers.ModelSerializer):
             "id",
             "username",
             "firstName",
-            "lastName",
             "email",
             "phone",
             "role",

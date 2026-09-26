@@ -6,6 +6,8 @@ from categorie.models import Category
 # Create your models here.
 
 class User(AbstractUser):
+    last_name = None
+
     class Role(models.TextChoices):
         SUPER_ADMIN = "superadmin","Super Admin"
         ADMIN = "admin","Admin"
