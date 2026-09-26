@@ -3,6 +3,7 @@ from rest_framework import serializers
 from users.models import User
 from products.serializers import ProductSerializer
 from favoris.serializers import ReviewSerializer
+from .models import Boutique
 
 
 class ShopSerializer(serializers.ModelSerializer):
@@ -69,3 +70,52 @@ class ShopSerializer(serializers.ModelSerializer):
 
         reviews = Favorite.objects.filter(product__owner=obj)[:5]
         return ReviewSerializer(reviews, many=True).data
+
+class BoutiqueSerializer(serializers.ModelSerializer):
+    """Reçoit directement les clés envoyées par le formulaire /louer-espace."""
+
+    companyName = serializers.CharField(source="company_name", max_length=150)
+    ownerName = serializers.CharField(source="owner_name", max_length=150)
+    otherNeighborhood = serializers.CharField(
+        source="other_neighborhood",
+        max_length=100,
+        required=False,
+        allow_blank=True,
+    )
+    ownerId = serializers.IntegerField(source="owner_id", read_only=True)
+    ownerUsername = serializers.CharField(source="owner.username", read_only=True)
+    date = serializers.DateTimeField(source="created_at", read_only=True)
+
+    class Meta:
+        model = Boutique
+        fields = [
+            "id",
+            "companyName",
+            "ownerName",
+            "industry",
+            "email",
+            "phone",
+            "whatsapp",
+            "slogan",
+            "facebook",
+            "instagram",
+            "tiktok",
+            "website",
+            "province",
+            "commune",
+            "neighborhood",
+            "otherNeighborhood",
+            "ownerId",
+            "ownerUsername",
+            "status",
+            "date",
+            "created_at",
+        ]
+        read_only_fields = ["status", "created_at"]
+
+    def validate(self, attrs):
+        if attrs.get("neighborhood") == "Autre" and not attrs.get("other_neighborhood"):
+            raise serializers.ValidationError(
+                {"otherNeighborhood": "Précisez le quartier."}
+            )
+        return attrs
