@@ -11,11 +11,13 @@ class Boutique(models.Model):
         REJECTED = "rejected", "Rejetée"
         SUSPENDED = "suspended", "Suspendue"
 
-    # Un commerçant ne peut posséder qu'une seule boutique (garanti par la BDD).
-    owner = models.OneToOneField(
+    # Un commerçant ne peut avoir qu'une seule demande en cours (garanti par
+    # perform_create). Les demandes rejetées restent dans l'historique, donc la
+    # relation est un ForeignKey et non un OneToOne.
+    owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="boutique",
+        related_name="boutiques",
         null=True,
         blank=True,
     )

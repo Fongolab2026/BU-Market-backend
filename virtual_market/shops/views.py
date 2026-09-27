@@ -87,9 +87,29 @@ class BoutiqueViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == "create":
             permission_classes = [AllowAny]
+        elif self.action == "my_request":
+            permission_classes = [IsAuthenticated]
         else:
             permission_classes = [IsAdminOrSuperAdmin]
         return [permission() for permission in permission_classes]
+
+    @action(detail=False, methods=["get"], url_path="my-request")
+    def my_request(self, request):
+        """Demande de location du commerçant connecté, pour l'afficher sur le bouton d'accueil."""
+        boutique = (
+            Boutique.objects.filter(owner=request.user)
+            .order_by("-created_at")
+            .first()
+        )
+        if boutique is None:
+            return Response({"exists": False, "status": None}, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "exists": True,
+                "status": boutique.status,
+                "boutique": self.get_serializer(boutique).data,
+            }
+        )
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -108,10 +128,28 @@ class BoutiqueViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user if self.request.user.is_authenticated else None
         if user is not None:
-            # Un commerçant ne peut avoir qu'une seule boutique.
-            if hasattr(user, "boutique") or user.role == User.Role.SELLER:
+            if user.role == User.Role.SELLER:
                 raise ValidationError(
-                    "Vous possédez déjà une boutique. Une seule boutique est autorisée par compte."
+                    "Vous êtes déjà commerçant. Une seule boutique est autorisée par compte."
+                )
+            # Une seule demande « ouverte » à la fois. Une demande rejetée ou
+            # suspendue n'empêche pas d'en soumettre une nouvelle.
+            open_request = (
+                Boutique.objects.filter(owner=user)
+                .exclude(
+                    status__in=[Boutique.Status.REJECTED, Boutique.Status.SUSPENDED]
+                )
+                .order_by("-created_at")
+                .first()
+            )
+            if open_request is not None:
+                raise ValidationError(
+                    {
+                        "status": (
+                            "Vous avez déjà une demande en cours. "
+                            "Une seule boutique est autorisée par compte."
+                        )
+                    }
                 )
         boutique = serializer.save(owner=user)
         self._notify_admins(boutique)
