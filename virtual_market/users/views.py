@@ -1,14 +1,24 @@
 from django.db.models import Q
 from django.utils import timezone
-from .serializer import UserSerializer, AdminUserSerializer
+from .serializer import (
+    UserSerializer,
+    AdminUserSerializer,
+    TokenObtainPairWithUserSerializer,
+)
 from .models import User
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from rest_framework_simplejwt.views import TokenObtainPairView
 from .permisions import IsOwnerOrAdmin, IsAdminOrSuperAdmin
 
 # Create your views here.
+
+
+class TokenObtainPairWithUserView(TokenObtainPairView):
+    serializer_class = TokenObtainPairWithUserSerializer
+
 
 class UserViewset(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by("-date_joined")
@@ -79,7 +89,3 @@ class UserViewset(viewsets.ModelViewSet):
             user.is_active = True
         user.save()
         return Response(AdminUserSerializer(user).data)
-
-    @action(detail=False, methods=["get"], url_path="me", permission_classes=[IsAuthenticated])
-    def me(self, request):
-        return Response(UserSerializer(request.user).data)

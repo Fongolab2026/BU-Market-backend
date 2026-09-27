@@ -20,10 +20,11 @@ from django.contrib import admin
 from django.urls import path, include
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from .views import ApiRootView
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from users.views import TokenObtainPairWithUserView
+from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
-    path('api/auth/login/', TokenObtainPairView.as_view(), name="token_access"),
+    path('api/auth/login/', TokenObtainPairWithUserView.as_view(), name="token_access"),
     path('api/auth/refresh/', TokenRefreshView.as_view(), name="token_refresh"),
     path('api/products/', include('products.urls')),
     path('api/users/', include('users.urls')),
