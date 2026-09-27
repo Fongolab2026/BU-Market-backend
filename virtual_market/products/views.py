@@ -73,9 +73,58 @@ class ProductsView(viewsets.ModelViewSet):
             permission_classes = [IsProductOwnerOrAdmin]
         elif self.action == 'create':
             permission_classes = [IsAuthenticated]
+        elif self.action in ('my_products', 'my_stats'):
+            permission_classes = [IsAuthenticated]
         else:
             permission_classes = [AllowAny]
         return [permission() for permission in permission_classes]
+
+    @action(detail=False, methods=["get"], url_path="my-products")
+    def my_products(self, request):
+        """Produits du commerçant connecté."""
+        qs = self.get_queryset().filter(owner=request.user)
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(qs, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=["get"], url_path="my-stats")
+    def my_stats(self, request):
+        """Statistiques du commerçant connecté."""
+        from django.db.models import Count, Sum
+        from commande.models import Order, OrderItem
+        from django.db.models.functions import TruncDate
+        from django.utils import timezone
+        from datetime import timedelta
+
+        products_qs = Product.objects.filter(owner=request.user)
+        total_products = products_qs.count()
+        active_products = products_qs.filter(status=Product.Status.ACTIVE).count()
+        total_stock = products_qs.aggregate(total=Sum('stock'))['total'] or 0
+        total_views = products_qs.aggregate(total=Sum('views'))['total'] or 0
+
+        # Weekly sales
+        week_ago = timezone.now() - timedelta(days=7)
+        weekly_sales = OrderItem.objects.filter(
+            product__owner=request.user,
+            order__created_at__gte=week_ago,
+            order__status__in=[Order.Status.COMPLETED, Order.Status.SHIPPED]
+        ).aggregate(total=Sum('quantity'))['total'] or 0
+
+        # Recent orders
+        recent_orders = OrderItem.objects.filter(
+            product__owner=request.user
+        ).select_related('order', 'product').order_by('-order__created_at')[:10]
+
+        return Response({
+            "total_products": total_products,
+            "active_products": active_products,
+            "total_stock": total_stock,
+            "total_views": total_views,
+            "weekly_sales": weekly_sales,
+        })
 
     @action(detail=True, methods=["patch"], url_path="status")
     def set_status(self, request, pk=None):
