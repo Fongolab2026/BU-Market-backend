@@ -1,33 +1,19 @@
 from django.db.models import Q
 from django.utils import timezone
-<<<<<<< Updated upstream
-from .serializer import (
-    UserSerializer,
-    AdminUserSerializer,
-    TokenObtainPairWithUserSerializer,
-)
-=======
 from .serializer import UserSerializer, AdminUserSerializer, AdminUserCreateSerializer, normalize_admin_role
->>>>>>> Stashed changes
 from .models import User
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from rest_framework_simplejwt.views import TokenObtainPairView
 from .permisions import IsOwnerOrAdmin, IsAdminOrSuperAdmin
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+
 # Create your views here.
 
 
-<<<<<<< Updated upstream
-class TokenObtainPairWithUserView(TokenObtainPairView):
-    serializer_class = TokenObtainPairWithUserSerializer
-
-
-=======
 class EmailOrUsernameTokenObtainPairSerializer(TokenObtainPairSerializer):
     """Accepte un identifiant : nom d'utilisateur OU adresse e-mail.
 
@@ -68,7 +54,7 @@ class EmailOrUsernameTokenObtainPairSerializer(TokenObtainPairSerializer):
 class LoginView(TokenObtainPairView):
     serializer_class = EmailOrUsernameTokenObtainPairSerializer
 
->>>>>>> Stashed changes
+
 class UserViewset(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by("-date_joined")
     serializer_class = UserSerializer

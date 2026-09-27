@@ -1,17 +1,4 @@
 from rest_framework import serializers
-<<<<<<< Updated upstream
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import User
-
-
-class TokenObtainPairWithUserSerializer(TokenObtainPairSerializer):
-    """Renvoie l'utilisateur avec les jetons pour eviter un aller-retour."""
-
-    def validate(self, attrs):
-        data = super().validate(attrs)
-        data["user"] = UserSerializer(self.user).data
-        return data
-=======
 from django.contrib.auth.password_validation import validate_password
 from .models import User
 
@@ -44,7 +31,6 @@ def build_username(email, first_name=""):
         suffix += 1
         candidate = f"{base}{suffix}"
     return candidate
->>>>>>> Stashed changes
 
 
 class UserSerializer(serializers.ModelSerializer):
