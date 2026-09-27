@@ -1,3 +1,4 @@
+from django.db.models import Q
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -35,6 +36,22 @@ class ReviewViewSet(viewsets.ModelViewSet):
         else:
             permission_classes = [IsAdminOrSuperAdmin]
         return [permission() for permission in permission_classes]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        params = self.request.query_params
+        search = params.get("search")
+        status_filter = params.get("status")
+        if search:
+            qs = qs.filter(
+                Q(user__username__icontains=search)
+                | Q(comment__icontains=search)
+                | Q(product__name__icontains=search)
+                | Q(product__owner__shop_name__icontains=search)
+            )
+        if status_filter and status_filter != "all":
+            qs = qs.filter(status=status_filter)
+        return qs
 
     @action(detail=True, methods=["patch"], url_path="hide")
     def hide(self, request, pk=None):

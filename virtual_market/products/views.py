@@ -3,7 +3,7 @@ from django.shortcuts import render
 from .models import Product, ProductImage
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from .serializers import ProductSerializer, ProductImageSerializer
+from .serializers import ProductSerializer, ProductImageSerializer, AdminProductWriteSerializer
 from admin.pagination import AdminPageNumberPagination
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
@@ -22,16 +22,40 @@ class ProductsView(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset().select_related("owner", "category").prefetch_related("images")
-        search = self.request.query_params.get("search")
-        status = self.request.query_params.get("status")
+        params = self.request.query_params
+        search = params.get("search")
+        status = params.get("status")
+        category = params.get("category")
+        shop = params.get("shop")
         if search:
-            qs = qs.filter(Q(name__icontains=search) | Q(details__icontains=search))
-        if status:
+            qs = qs.filter(
+                Q(name__icontains=search)
+                | Q(details__icontains=search)
+                | Q(owner__shop_name__icontains=search)
+            )
+        if status and status != "all":
             qs = qs.filter(status=status)
+        if category and category != "all":
+            qs = qs.filter(category_id=category)
+        if shop and shop != "all":
+            qs = qs.filter(owner_id=shop)
         return qs
 
+    def get_serializer_class(self):
+        user = self.request.user
+        is_admin = user.is_authenticated and (
+            user.is_superuser or user.role in ("admin", "superadmin")
+        )
+        if is_admin and self.action in ("create", "update", "partial_update"):
+            return AdminProductWriteSerializer
+        return ProductSerializer
+
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        owner_id = self.request.data.get("shopId")
+        if owner_id:
+            serializer.save(owner_id=owner_id)
+        else:
+            serializer.save(owner=self.request.user)
         return serializer
 
     def retrieve(self, request, *args, **kwargs):

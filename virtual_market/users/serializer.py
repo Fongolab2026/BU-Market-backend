@@ -1,4 +1,5 @@
 from rest_framework import serializers
+<<<<<<< Updated upstream
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import User
 
@@ -10,6 +11,40 @@ class TokenObtainPairWithUserSerializer(TokenObtainPairSerializer):
         data = super().validate(attrs)
         data["user"] = UserSerializer(self.user).data
         return data
+=======
+from django.contrib.auth.password_validation import validate_password
+from .models import User
+
+
+#: Libelles de l'interface admin -> valeurs reelles stockees en base.
+ADMIN_ROLE_TO_MODEL = {
+    "merchant": User.Role.SELLER,
+    "seller": User.Role.SELLER,
+    "client": User.Role.BUYER,
+    "buyer": User.Role.BUYER,
+    "admin": User.Role.ADMIN,
+    "superadmin": User.Role.SUPER_ADMIN,
+}
+
+
+def normalize_admin_role(value):
+    """Accepte les libelles de l'interface admin et renvoie la valeur du modele."""
+    if not value:
+        return None
+    return ADMIN_ROLE_TO_MODEL.get(str(value).strip().lower())
+
+
+def build_username(email, first_name=""):
+    """Fabrique un identifiant unique a partir de l'e-mail et du prenom."""
+    base = (str(email or "").split("@")[0] or "user").strip().lower()
+    base = "".join(char for char in base if char.isalnum() or char in "._-") or "user"
+    candidate = base
+    suffix = 1
+    while User.objects.filter(username=candidate).exists():
+        suffix += 1
+        candidate = f"{base}{suffix}"
+    return candidate
+>>>>>>> Stashed changes
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -51,6 +86,57 @@ class UserSerializer(serializers.ModelSerializer):
             instance.set_password(password)
         instance.save()
         return instance
+
+    def to_internal_value(self, data):
+        """Accepte les libelles de role de l'interface admin (merchant, client...)."""
+        mutable = data.copy()
+        if "role" in mutable:
+            mutable["role"] = normalize_admin_role(mutable.get("role")) or mutable["role"]
+        if mutable.get("location"):
+            mutable["adresse"] = mutable["location"]
+        mutable.pop("location", None)
+        return super().to_internal_value(mutable)
+
+
+class AdminUserCreateSerializer(serializers.ModelSerializer):
+    """Creation d'un compte depuis l'interface admin.
+
+    Le formulaire n'envoie que prenom / e-mail / telephone / localisation / role :
+    l'identifiant et le mot de passe sont generes cote serveur.
+    """
+
+    firstName = serializers.CharField(source="first_name", max_length=150)
+    location = serializers.CharField(source="adresse", required=False, allow_blank=True)
+    role = serializers.CharField()
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    class Meta:
+        model = User
+        fields = ["id", "username", "firstName", "email", "phone", "location", "role", "password"]
+        read_only_fields = ["id", "username"]
+
+    def validate_email(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("L'e-mail est obligatoire.")
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("Un compte utilise deja cet e-mail.")
+        return value
+
+    def validate_role(self, value):
+        role = normalize_admin_role(value)
+        if role is None:
+            raise serializers.ValidationError("Role inconnu.")
+        return role
+
+    def create(self, validated_data):
+        password = validated_data.pop("password", "") or build_username(
+            validated_data.get("email")
+        ) + "1!"
+        user = User(username=build_username(validated_data.get("email")), **validated_data)
+        user.set_password(password)
+        user.save()
+        return user
 
 
 class AdminUserSerializer(serializers.ModelSerializer):

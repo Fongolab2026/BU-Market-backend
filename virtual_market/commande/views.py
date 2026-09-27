@@ -1,3 +1,4 @@
+from django.db.models import Q
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -15,8 +16,21 @@ class OrderViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.is_superuser or user.role in ("admin", "superadmin"):
-            return Order.objects.all().order_by("-created_at")
-        return Order.objects.filter(user=user).order_by("-created_at")
+            qs = Order.objects.select_related("user").prefetch_related("items__product").order_by("-created_at")
+        else:
+            qs = Order.objects.filter(user=user).order_by("-created_at")
+        params = self.request.query_params
+        search = params.get("search")
+        status = params.get("status")
+        if search:
+            qs = qs.filter(
+                Q(user__username__icontains=search)
+                | Q(user__adresse__icontains=search)
+                | Q(items__product__owner__shop_name__icontains=search)
+            ).distinct()
+        if status and status != "all":
+            qs = qs.filter(status=status)
+        return qs
 
     def get_permissions(self):
         if self.action == "set_status":

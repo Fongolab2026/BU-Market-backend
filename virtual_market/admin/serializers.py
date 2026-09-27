@@ -14,7 +14,7 @@ class ModerationItemSerializer(serializers.Serializer):
     status = serializers.SerializerMethodField()
 
     def get_type(self, obj):
-        return "seller"
+        return "Boutique"
 
     def get_status(self, obj):
         return "pending"

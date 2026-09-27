@@ -26,8 +26,10 @@ def _percent_change(current, previous):
 def _kpi(cid, label, current, recent, previous, invert=False):
     change = _percent_change(recent, previous)
     up = recent >= previous
-    trend = "down" if up else "up"
+    # `invert` sert pour le KPI "à modérer" : moins il y a d'attente, mieux c'est.
     if invert:
+        trend = "down" if up else "up"
+    else:
         trend = "up" if up else "down"
     tone = {"up": "positive", "down": "negative"}.get(trend, "neutral")
     return {
@@ -83,7 +85,7 @@ class AdminStatsView(APIView):
                 previous("created_at", products),
             ),
             _kpi(
-                "moderation",
+                "pending",
                 "À modérer",
                 pending.count(),
                 recent("date_joined", pending),

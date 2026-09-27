@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from categorie.models import Category
 from .models import Product, ProductImage
 
 
@@ -25,6 +26,7 @@ class ProductSerializer(serializers.ModelSerializer):
     shopName = serializers.SerializerMethodField()
     shopCategory = serializers.SerializerMethodField()
     shopStatus = serializers.SerializerMethodField()
+    categoryName = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -37,6 +39,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "views",
             "details",
             "category",
+            "categoryName",
             "owner",
             "created_at",
             "date",
@@ -61,8 +64,56 @@ class ProductSerializer(serializers.ModelSerializer):
     def get_shopName(self, obj):
         return obj.owner.shop_display_name
 
+    def get_categoryName(self, obj):
+        return obj.category.name
+
     def get_shopCategory(self, obj):
         return obj.owner.shop_category.name if obj.owner.shop_category else ""
 
     def get_shopStatus(self, obj):
         return obj.owner.shop_status
+
+
+class AdminProductWriteSerializer(serializers.ModelSerializer):
+    """Ecriture produit depuis l'interface admin.
+
+    Le formulaire admin envoie `shopId` (le proprietaire) ; la categorie est
+    obligatoire uniquement a la creation et la description reste facultative.
+    """
+
+    shopId = serializers.IntegerField(required=False, write_only=True)
+    categoryId = serializers.IntegerField(required=False, write_only=True)
+
+    class Meta:
+        model = Product
+        fields = [
+            "id",
+            "shopId",
+            "categoryId",
+            "name",
+            "price",
+            "stock",
+            "details",
+            "status",
+        ]
+        extra_kwargs = {"details": {"required": False, "allow_blank": True}}
+
+    def validate(self, attrs):
+        category_id = attrs.pop("categoryId", None)
+        attrs.pop("shopId", None)
+        if category_id:
+            try:
+                attrs["category"] = Category.objects.get(pk=category_id)
+            except (Category.DoesNotExist, ValueError, TypeError):
+                raise serializers.ValidationError(
+                    {"categoryId": "Categorie introuvable."}
+                )
+        elif self.instance is None:
+            raise serializers.ValidationError(
+                {"categoryId": "Choisissez une categorie pour le produit."}
+            )
+        attrs.setdefault("details", "")
+        return attrs
+
+    def to_representation(self, instance):
+        return ProductSerializer(instance, context=self.context).data

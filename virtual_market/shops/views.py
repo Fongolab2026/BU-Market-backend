@@ -10,6 +10,7 @@ from rest_framework.response import Response
 
 from products.models import Product
 from products.serializers import ProductSerializer
+from categorie.models import Category
 from users.models import User
 from users.permisions import IsAdminOrSuperAdmin
 from .models import Boutique
@@ -37,9 +38,11 @@ class ShopViewSet(viewsets.ReadOnlyModelViewSet):
         shop_status = self.request.query_params.get("status")
         if search:
             qs = qs.filter(
-                Q(username__icontains=search) | Q(shop_name__icontains=search)
+                Q(username__icontains=search)
+                | Q(shop_name__icontains=search)
+                | Q(shop_description__icontains=search)
             )
-        if shop_status:
+        if shop_status and shop_status != "all":
             qs = qs.filter(shop_status=shop_status)
         return qs
 
@@ -48,6 +51,35 @@ class ShopViewSet(viewsets.ReadOnlyModelViewSet):
         instance.shop_views += 1
         instance.save(update_fields=["shop_views"])
         return super().retrieve(request, *args, **kwargs)
+
+    @action(detail=True, methods=["patch"], url_path="info")
+    def update_info(self, request, pk=None):
+        """Modifie la fiche boutique (nom, categorie, description) depuis l'admin."""
+        shop = self.get_object()
+        if "name" in request.data:
+            shop.shop_name = str(request.data.get("name") or "").strip()
+        if "description" in request.data:
+            shop.shop_description = str(request.data.get("description") or "").strip()
+        if "category" in request.data:
+            category_name = str(request.data.get("category") or "").strip()
+            if category_name:
+                category = Category.objects.filter(name__iexact=category_name).first()
+                if category is None:
+                    category = Category.objects.create(name=category_name)
+                shop.shop_category = category
+        shop.save()
+        return Response(self.get_serializer(shop).data)
+
+    @action(detail=True, methods=["delete"], url_path="remove")
+    def remove_shop(self, request, pk=None):
+        """Retire la boutique du canal sans supprimer le compte du vendeur."""
+        shop = self.get_object()
+        shop.shop_name = ""
+        shop.shop_category = None
+        shop.shop_description = ""
+        shop.shop_status = User.ShopStatus.PENDING
+        shop.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["patch"], url_path="validate")
     def validate(self, request, pk=None):
@@ -121,7 +153,7 @@ class BoutiqueViewSet(viewsets.ModelViewSet):
                 | Q(owner_name__icontains=search)
                 | Q(province__icontains=search)
             )
-        if status_filter:
+        if status_filter and status_filter != "all":
             qs = qs.filter(status=status_filter)
         return qs
 

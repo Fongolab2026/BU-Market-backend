@@ -1,10 +1,14 @@
 from django.db.models import Q
 from django.utils import timezone
+<<<<<<< Updated upstream
 from .serializer import (
     UserSerializer,
     AdminUserSerializer,
     TokenObtainPairWithUserSerializer,
 )
+=======
+from .serializer import UserSerializer, AdminUserSerializer, AdminUserCreateSerializer, normalize_admin_role
+>>>>>>> Stashed changes
 from .models import User
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -12,42 +16,88 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .permisions import IsOwnerOrAdmin, IsAdminOrSuperAdmin
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 # Create your views here.
 
 
+<<<<<<< Updated upstream
 class TokenObtainPairWithUserView(TokenObtainPairView):
     serializer_class = TokenObtainPairWithUserSerializer
 
 
+=======
+class EmailOrUsernameTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Accepte un identifiant : nom d'utilisateur OU adresse e-mail.
+
+    Retourne aussi le profil dans la reponse pour que le frontend n'ait pas
+    a appeler /users/users/me/ juste apres la connexion.
+    """
+
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        token["username"] = user.username
+        token["role"] = user.role
+        return token
+
+    def validate(self, attrs):
+        identifier = str(attrs.get("username", "")).strip()
+        if "@" in identifier:
+            match = User.objects.filter(email__iexact=identifier).first()
+            if match is not None:
+                attrs["username"] = match.username
+        data = super().validate(attrs)
+        user = self.user
+        data["user"] = {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "phone": user.phone,
+            "role": user.role,
+            "is_staff": user.is_staff,
+            "is_superuser": user.is_superuser,
+            "is_active": user.is_active,
+        }
+        return data
+
+
+class LoginView(TokenObtainPairView):
+    serializer_class = EmailOrUsernameTokenObtainPairSerializer
+
+>>>>>>> Stashed changes
 class UserViewset(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by("-date_joined")
     serializer_class = UserSerializer
 
     def get_serializer_class(self):
-        if self.action == "create":
-            return UserSerializer
         user = self.request.user
-        if user.is_authenticated and (
+        is_admin = user.is_authenticated and (
             user.is_superuser or user.role in ("admin", "superadmin")
-        ):
-            return AdminUserSerializer
-        return UserSerializer
+        )
+        if self.action == "create":
+            return AdminUserCreateSerializer if is_admin else UserSerializer
+        return AdminUserSerializer if is_admin else UserSerializer
 
     def get_queryset(self):
         qs = super().get_queryset()
-        search = self.request.query_params.get("search")
-        role = self.request.query_params.get("role")
-        status = self.request.query_params.get("status")
+        params = self.request.query_params
+        search = params.get("search")
+        role = params.get("role")
+        status = params.get("status")
         if search:
             qs = qs.filter(
                 Q(username__icontains=search)
                 | Q(email__icontains=search)
                 | Q(first_name__icontains=search)
+                | Q(shop_name__icontains=search)
             )
-        if role:
-            qs = qs.filter(role=role)
-        if status:
+        if role and role != "all":
+            qs = qs.filter(role=normalize_admin_role(role) or role)
+        if status and status != "all":
             qs = qs.filter(status=status)
         return qs
 
@@ -68,10 +118,13 @@ class UserViewset(viewsets.ModelViewSet):
             for permission in permission_classes
         ]
 
-    @action(detail=False, methods=["get", "patch"], url_path="me")
+    @action(
+        detail=False,
+        methods=["get", "patch"],
+        url_path="me",
+        permission_classes=[IsAuthenticated],
+    )
     def me(self, request):
-        if not request.user.is_authenticated:
-            return Response({"detail": "Non authentifié."}, status=401)
         if request.method == "PATCH":
             serializer = self.get_serializer(request.user, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)

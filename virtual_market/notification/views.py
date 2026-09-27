@@ -1,3 +1,4 @@
+from django.db.models import Q
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -21,8 +22,17 @@ class NotificationViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.role in ("superadmin", "admin"):
-            return Notification.objects.all().order_by("-created_at")
-        return Notification.objects.filter(user=user).order_by("-created_at")
+            qs = Notification.objects.select_related("user").order_by("-created_at")
+        else:
+            qs = Notification.objects.filter(user=user).order_by("-created_at")
+        search = self.request.query_params.get("search")
+        if search:
+            qs = qs.filter(
+                Q(title__icontains=search)
+                | Q(message__icontains=search)
+                | Q(user__username__icontains=search)
+            )
+        return qs
 
     def perform_create(self, serializer):
         user = self.request.data.get("user")

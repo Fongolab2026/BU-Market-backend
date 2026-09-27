@@ -26,8 +26,21 @@ class PublicationRequestViewSet(viewsets.ModelViewSet):
             .order_by("-created_at")
         )
         if self.request.user.role in ("admin", "superadmin") or self.request.user.is_superuser:
-            return qs
-        return qs.filter(seller=self.request.user)
+            pass
+        else:
+            qs = qs.filter(seller=self.request.user)
+        params = self.request.query_params
+        search = params.get("search")
+        status_filter = params.get("status")
+        if search:
+            qs = qs.filter(
+                Q(product__name__icontains=search)
+                | Q(seller__username__icontains=search)
+                | Q(seller__shop_name__icontains=search)
+            )
+        if status_filter and status_filter != "all":
+            qs = qs.filter(status=status_filter)
+        return qs
 
     def perform_create(self, serializer):
         serializer.save(seller=self.request.user)
