@@ -42,6 +42,17 @@ class OrderViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
+    @action(detail=False, methods=["get"], url_path="shop-orders")
+    def shop_orders(self, request):
+        """Commandes contenant les produits du commerçant connecté."""
+        qs = self.get_queryset().filter(items__product__owner=request.user).distinct()
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(qs, many=True)
+        return Response(serializer.data)
+
     @action(detail=True, methods=["patch"], url_path="status")
     def set_status(self, request, pk=None):
         order = self.get_object()
