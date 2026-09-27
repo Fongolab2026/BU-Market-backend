@@ -28,6 +28,8 @@ class ShopViewSet(viewsets.ReadOnlyModelViewSet):
     def get_permissions(self):
         if self.action in ("add_product",) and self.request.method == "POST":
             permission_classes = [IsAuthenticated]
+        elif self.action in ("my_shop",):
+            permission_classes = [IsAuthenticated]
         else:
             permission_classes = [IsAdminOrSuperAdmin]
         return [permission() for permission in permission_classes]
@@ -101,6 +103,15 @@ class ShopViewSet(viewsets.ReadOnlyModelViewSet):
         shop.shop_status = request.data.get("status", shop.shop_status)
         shop.save()
         return Response(self.get_serializer(shop).data)
+
+    @action(detail=False, methods=["get"], url_path="my-shop")
+    def my_shop(self, request):
+        """Récupère la boutique du commerçant connecté."""
+        shop = self.get_queryset().filter(pk=request.user.pk).first()
+        if not shop:
+            return Response({"detail": "Aucune boutique trouvée pour ce commerçant."}, status=status.HTTP_404_NOT_FOUND)
+        serializer = self.get_serializer(shop)
+        return Response(serializer.data)
 
     @action(detail=True, methods=["post"], url_path="products")
     def add_product(self, request, pk=None):
@@ -224,7 +235,8 @@ class BoutiqueViewSet(viewsets.ModelViewSet):
         owner.adresse = ", ".join(
             [p for p in (boutique.province, boutique.commune, boutique.neighborhood) if p]
         )
-        owner.save(update_fields=["role", "shop_name", "shop_description", "adresse"])
+        owner.shop_status = User.ShopStatus.VALIDATED
+        owner.save(update_fields=["role", "shop_name", "shop_description", "adresse", "shop_status"])
         return owner
 
     @action(detail=True, methods=["patch"], url_path="validate")

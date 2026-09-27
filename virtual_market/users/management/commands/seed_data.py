@@ -28,6 +28,8 @@ User = get_user_model()
 
 DEMO_PASSWORD = "Demo@2026"
 
+DEFAULT_PASSWORD = "Demo@2026"
+
 CATEGORIES = [
     ("Électronique", "Téléphones, ordinateurs et accessoires du quotidien."),
     ("Mode", "Vêtements, chaussures et accessoires tendance."),
@@ -174,7 +176,7 @@ class Command(BaseCommand):
         self._create_orders(buyers, products, now)
         self._create_messages(sellers, buyers, now)
         self._create_notifications(sellers, buyers, now)
-        self._create_boutiques(sellers, now)
+        self._create_boutiques(buyers, now)
         self._create_settings()
 
         self.stdout.write(self.style.SUCCESS("\nJeu de donnees cree :"))
@@ -248,6 +250,7 @@ class Command(BaseCommand):
             )
             if created:
                 self._backdate(User, seller.pk, "date_joined", self._ago(now, 20 - index * 2))
+                seller.set_password(DEFAULT_PASSWORD)
             seller.shop_name = shop
             seller.shop_description = description
             seller.shop_status = shop_status
@@ -277,6 +280,8 @@ class Command(BaseCommand):
             )
             if created:
                 self._backdate(User, buyer.pk, "date_joined", self._ago(now, 18 - index))
+            buyer.set_password(DEFAULT_PASSWORD)
+            buyer.save()
             buyers.append(buyer)
         self.stdout.write(f"  {len(buyers)} clients")
         return buyers
@@ -482,17 +487,16 @@ class Command(BaseCommand):
                 count += 1
         self.stdout.write(f"  {count} notifications")
 
-    def _create_boutiques(self, sellers, now):
+    def _create_boutiques(self, buyers, now):
         requests = [
-            ("Sport Express", "Alice Kwizera", "Sport & Fitness", "pending"),
-            ("Auto Pieces BJK", "Thierry Bizimana", "Automobile", "pending"),
-            ("Librairie du Savoir", "Grace Nkurunziza", "Librairie", "pending"),
-            ("Pharmacie Centrale", "Chantal Ndayisaba", "Sante", "validated"),
-            ("Cafe du Centre", "Bosco Niyondiko", "Alimentaire", "rejected"),
+            ("Sport Express", "Alice Kwizera", "Sport & Fitness", "pending", "client1@exemple.bm"),
+            ("Auto Pieces BJK", "Thierry Bizimana", "Automobile", "pending", "client2@exemple.bm"),
+            ("Librairie du Savoir", "Grace Nkurunziza", "Librairie", "pending", "client3@exemple.bm"),
+            ("Pharmacie Centrale", "Chantal Ndayisaba", "Sante", "validated", "contact@pharmacie.bm"),
+            ("Cafe du Centre", "Bosco Niyondiko", "Alimentaire", "rejected", "contact@cafe.bm"),
         ]
         count = 0
-        for index, (company, owner, industry, status) in enumerate(requests):
-            email = f"contact@{company.split()[0].lower()}.bm"
+        for index, (company, owner, industry, status, email) in enumerate(requests):
             request, created = Boutique.objects.get_or_create(
                 email=email,
                 company_name=company,

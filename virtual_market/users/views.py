@@ -1,6 +1,6 @@
 from django.db.models import Q
 from django.utils import timezone
-from .serializer import UserSerializer, AdminUserSerializer, AdminUserCreateSerializer, normalize_admin_role
+from .serializer import UserSerializer, AdminUserSerializer, AdminUserCreateSerializer, MeSerializer, normalize_admin_role
 from .models import User
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -116,7 +116,7 @@ class UserViewset(viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(serializer.data)
-        return Response(self.get_serializer(request.user).data)
+        return Response(MeSerializer(request.user).data)
 
     @action(detail=True, methods=["patch"], url_path="status")
     def set_status(self, request, pk=None):

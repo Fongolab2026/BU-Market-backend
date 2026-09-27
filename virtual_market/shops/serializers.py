@@ -71,6 +71,7 @@ class ShopSerializer(serializers.ModelSerializer):
         reviews = Favorite.objects.filter(product__owner=obj)[:5]
         return ReviewSerializer(reviews, many=True).data
 
+
 class BoutiqueSerializer(serializers.ModelSerializer):
     """Reçoit directement les clés envoyées par le formulaire /louer-espace."""
 
@@ -85,6 +86,7 @@ class BoutiqueSerializer(serializers.ModelSerializer):
     ownerId = serializers.IntegerField(source="owner_id", read_only=True)
     ownerUsername = serializers.CharField(source="owner.username", read_only=True)
     date = serializers.DateTimeField(source="created_at", read_only=True)
+    owner = serializers.SerializerMethodField()
 
     class Meta:
         model = Boutique
@@ -110,8 +112,20 @@ class BoutiqueSerializer(serializers.ModelSerializer):
             "status",
             "date",
             "created_at",
+            "owner",
         ]
         read_only_fields = ["status", "created_at"]
+
+    def get_owner(self, obj):
+        if obj.owner is None:
+            return None
+        return {
+            "id": obj.owner.id,
+            "username": obj.owner.username,
+            "email": obj.owner.email,
+            "first_name": obj.owner.first_name,
+            "role": obj.owner.role,
+        }
 
     def validate(self, attrs):
         if attrs.get("neighborhood") == "Autre" and not attrs.get("other_neighborhood"):

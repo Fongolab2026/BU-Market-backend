@@ -202,6 +202,37 @@ class AdminUserSerializer(serializers.ModelSerializer):
         entries.sort(key=lambda entry: entry["date"], reverse=True)
         return entries[:10]
 
+
+class MeSerializer(serializers.ModelSerializer):
+    """Serializer pour l'endpoint /users/users/me/ - inclut la boutique pour les commerçants."""
+
+    shop = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "phone",
+            "adresse",
+            "profile_pic",
+            "role",
+            "is_active",
+            "shop",
+        ]
+        read_only_fields = ["role", "is_active"]
+
+    def get_shop(self, obj):
+        if not obj.is_seller:
+            return None
+        return {
+            "id": obj.id,
+            "name": obj.shop_display_name,
+            "status": obj.shop_status,
+        }
+
     def create(self, validated_data):
         password = validated_data.pop("password", None)
         if not password:
