@@ -1,12 +1,25 @@
 from django.db.models import Q
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from users.permisions import IsAdminOrSuperAdmin
 from .models import Order, OrderItem
 from .serializers import OrderSerializer, OrderItemSerializer
+
+
+class IsOrderOwnerOrAdmin(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated
+
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+        return (
+            user.is_superuser
+            or user.role in ("admin", "superadmin")
+            or obj.items.filter(product__owner=user).exists()
+        )
 
 
 class OrderViewSet(viewsets.ModelViewSet):
@@ -17,6 +30,8 @@ class OrderViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.is_superuser or user.role in ("admin", "superadmin"):
             qs = Order.objects.select_related("user").prefetch_related("items__product").order_by("-created_at")
+        elif user.role == "seller":
+            qs = Order.objects.filter(items__product__owner=user).distinct().order_by("-created_at")
         else:
             qs = Order.objects.filter(user=user).order_by("-created_at")
         params = self.request.query_params
@@ -34,7 +49,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action == "set_status":
-            permission_classes = [IsAdminOrSuperAdmin]
+            permission_classes = [IsOrderOwnerOrAdmin]
         else:
             permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]

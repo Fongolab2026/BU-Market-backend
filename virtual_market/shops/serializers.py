@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from users.models import User
+from products.models import Product
 from products.serializers import ProductSerializer
 from favoris.serializers import ReviewSerializer
 from .models import Boutique
@@ -19,9 +20,18 @@ class ShopSerializer(serializers.ModelSerializer):
     messages = serializers.SerializerMethodField()
     products = serializers.IntegerField(source="products.count", read_only=True)
     owner = serializers.CharField(source="shop_display_name", read_only=True)
+    creatorName = serializers.SerializerMethodField()
     ownerId = serializers.IntegerField(source="pk", read_only=True)
     email = serializers.EmailField(read_only=True)
     phone = serializers.CharField(read_only=True)
+    address = serializers.SerializerMethodField()
+    website = serializers.SerializerMethodField()
+    facebook = serializers.SerializerMethodField()
+    instagram = serializers.SerializerMethodField()
+    tiktok = serializers.SerializerMethodField()
+    whatsapp = serializers.SerializerMethodField()
+    shopImage = serializers.SerializerMethodField()
+    creatorPhoto = serializers.SerializerMethodField()
     productList = serializers.SerializerMethodField()
     reviewList = serializers.SerializerMethodField()
 
@@ -40,9 +50,18 @@ class ShopSerializer(serializers.ModelSerializer):
             "messages",
             "products",
             "owner",
+            "creatorName",
             "ownerId",
             "email",
             "phone",
+            "address",
+            "website",
+            "facebook",
+            "instagram",
+            "tiktok",
+            "whatsapp",
+            "shopImage",
+            "creatorPhoto",
             "productList",
             "reviewList",
         ]
@@ -50,8 +69,56 @@ class ShopSerializer(serializers.ModelSerializer):
     def get_name(self, obj):
         return obj.shop_display_name
 
+    def get_creatorName(self, obj):
+        name = " ".join(
+            part.strip()
+            for part in (obj.first_name, getattr(obj, "last_name", ""))
+            if part and str(part).strip()
+        )
+        return name or obj.username
+
     def get_category(self, obj):
         return obj.shop_category.name if obj.shop_category else ""
+
+    def _validated_boutique(self, obj):
+        return obj.boutiques.filter(status=Boutique.Status.VALIDATED).order_by("-created_at").first()
+
+    def get_address(self, obj):
+        return obj.adresse
+
+    def get_shopImage(self, obj):
+        if not obj.shop_image:
+            return None
+        request = self.context.get("request")
+        url = obj.shop_image.url
+        return request.build_absolute_uri(url) if request else url
+
+    def get_creatorPhoto(self, obj):
+        if not obj.profile_pic:
+            return None
+        request = self.context.get("request")
+        url = obj.profile_pic.url
+        return request.build_absolute_uri(url) if request else url
+
+    def get_website(self, obj):
+        boutique = self._validated_boutique(obj)
+        return boutique.website if boutique else ""
+
+    def get_facebook(self, obj):
+        boutique = self._validated_boutique(obj)
+        return boutique.facebook if boutique else ""
+
+    def get_instagram(self, obj):
+        boutique = self._validated_boutique(obj)
+        return boutique.instagram if boutique else ""
+
+    def get_tiktok(self, obj):
+        boutique = self._validated_boutique(obj)
+        return boutique.tiktok if boutique else ""
+
+    def get_whatsapp(self, obj):
+        boutique = self._validated_boutique(obj)
+        return boutique.whatsapp if boutique else ""
 
     def get_rating(self, obj):
         return round(obj.shop_rating() or 0, 1)
@@ -63,7 +130,8 @@ class ShopSerializer(serializers.ModelSerializer):
         return obj.sent_messages.count() + obj.received_messages.count()
 
     def get_productList(self, obj):
-        return ProductSerializer(obj.products.all()[:5], many=True).data
+        products = obj.products.filter(status=Product.Status.ACTIVE).order_by("name")
+        return ProductSerializer(products, many=True).data
 
     def get_reviewList(self, obj):
         from favoris.models import Favorite

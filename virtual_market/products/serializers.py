@@ -27,6 +27,14 @@ class ProductSerializer(serializers.ModelSerializer):
     shopCategory = serializers.SerializerMethodField()
     shopStatus = serializers.SerializerMethodField()
     categoryName = serializers.SerializerMethodField()
+    sellerName = serializers.SerializerMethodField()
+    sellerEmail = serializers.SerializerMethodField()
+    sellerPhone = serializers.SerializerMethodField()
+    sellerAddress = serializers.SerializerMethodField()
+    sellerWebsite = serializers.SerializerMethodField()
+    sellerFacebook = serializers.SerializerMethodField()
+    sellerInstagram = serializers.SerializerMethodField()
+    sellerTiktok = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -40,6 +48,14 @@ class ProductSerializer(serializers.ModelSerializer):
             "details",
             "category",
             "categoryName",
+            "sellerName",
+            "sellerEmail",
+            "sellerPhone",
+            "sellerAddress",
+            "sellerWebsite",
+            "sellerFacebook",
+            "sellerInstagram",
+            "sellerTiktok",
             "owner",
             "created_at",
             "date",
@@ -51,6 +67,9 @@ class ProductSerializer(serializers.ModelSerializer):
             "main_image",
         ]
         read_only_fields = ["owner", "views", "status"]
+        extra_kwargs = {
+            "details": {"required": False, "allow_blank": True},
+        }
 
     def get_main_image(self, obj):
         request = self.context.get("request")
@@ -72,6 +91,44 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def get_shopStatus(self, obj):
         return obj.owner.shop_status
+
+    def _validated_boutique(self, obj):
+        from shops.models import Boutique
+
+        return obj.owner.boutiques.filter(status=Boutique.Status.VALIDATED).order_by("-created_at").first()
+
+    def get_sellerName(self, obj):
+        name = " ".join(
+            part.strip()
+            for part in (obj.owner.first_name, getattr(obj.owner, "last_name", ""))
+            if part and str(part).strip()
+        )
+        return name or obj.owner.username
+
+    def get_sellerEmail(self, obj):
+        return obj.owner.email
+
+    def get_sellerPhone(self, obj):
+        return obj.owner.phone
+
+    def get_sellerAddress(self, obj):
+        return obj.owner.adresse
+
+    def get_sellerWebsite(self, obj):
+        boutique = self._validated_boutique(obj)
+        return boutique.website if boutique else ""
+
+    def get_sellerFacebook(self, obj):
+        boutique = self._validated_boutique(obj)
+        return boutique.facebook if boutique else ""
+
+    def get_sellerInstagram(self, obj):
+        boutique = self._validated_boutique(obj)
+        return boutique.instagram if boutique else ""
+
+    def get_sellerTiktok(self, obj):
+        boutique = self._validated_boutique(obj)
+        return boutique.tiktok if boutique else ""
 
 
 class AdminProductWriteSerializer(serializers.ModelSerializer):

@@ -4,9 +4,10 @@ from django.db.models import Q
 from notification.models import Notification
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.parsers import FormParser, MultiPartParser
 
 from products.models import Product
 from products.serializers import ProductSerializer
@@ -26,9 +27,11 @@ class ShopViewSet(viewsets.ReadOnlyModelViewSet):
     )
 
     def get_permissions(self):
-        if self.action in ("add_product",) and self.request.method == "POST":
+        if self.action in ("add_product", "update_info") and self.request.method in ("POST", "PATCH"):
             permission_classes = [IsAuthenticated]
         elif self.action in ("my_shop",):
+            permission_classes = [IsAuthenticated]
+        elif self.action in ("list", "retrieve"):
             permission_classes = [IsAuthenticated]
         else:
             permission_classes = [IsAdminOrSuperAdmin]
@@ -54,14 +57,18 @@ class ShopViewSet(viewsets.ReadOnlyModelViewSet):
         instance.save(update_fields=["shop_views"])
         return super().retrieve(request, *args, **kwargs)
 
-    @action(detail=True, methods=["patch"], url_path="info")
+    @action(detail=True, methods=["patch"], url_path="info", parser_classes=[MultiPartParser, FormParser])
     def update_info(self, request, pk=None):
         """Modifie la fiche boutique (nom, categorie, description) depuis l'admin."""
         shop = self.get_object()
+        if not (request.user.is_superuser or request.user.role in ("admin", "superadmin")) and shop.pk != request.user.pk:
+            raise PermissionDenied("Vous ne pouvez modifier que votre boutique.")
         if "name" in request.data:
             shop.shop_name = str(request.data.get("name") or "").strip()
         if "description" in request.data:
             shop.shop_description = str(request.data.get("description") or "").strip()
+        if "shop_image" in request.FILES:
+            shop.shop_image = request.FILES["shop_image"]
         if "category" in request.data:
             category_name = str(request.data.get("category") or "").strip()
             if category_name:
@@ -116,6 +123,8 @@ class ShopViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["post"], url_path="products")
     def add_product(self, request, pk=None):
         shop = self.get_object()
+        if shop.pk != request.user.pk and not (request.user.is_superuser or request.user.role in ("admin", "superadmin")):
+            raise PermissionDenied("Vous ne pouvez ajouter un produit que dans votre boutique.")
         serializer = ProductSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save(owner=shop)
@@ -194,7 +203,10 @@ class BoutiqueViewSet(viewsets.ModelViewSet):
                         )
                     }
                 )
-        boutique = serializer.save(owner=user)
+        owner_name = None
+        if user is not None:
+            owner_name = user.get_full_name().strip() or user.username
+        boutique = serializer.save(owner=user, owner_name=owner_name or serializer.validated_data.get("owner_name", ""))
         self._notify_admins(boutique)
 
     def _notify_admins(self, boutique):

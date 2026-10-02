@@ -66,7 +66,7 @@ class ProductsView(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action == "set_status":
-            permission_classes = [IsAdminOrSuperAdmin]
+            permission_classes = [IsProductOwnerOrAdmin]
         elif self.action == "upload_images":
             permission_classes = [IsAuthenticated]
         elif self.action in ('destroy', 'update', 'partial_update'):

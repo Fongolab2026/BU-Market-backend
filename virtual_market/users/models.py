@@ -48,6 +48,7 @@ class User(AbstractUser):
         related_name="shops",
     )
     shop_description = models.TextField(blank=True, default="")
+    shop_image = models.ImageField(upload_to="shops/", blank=True, null=True)
     shop_views = models.PositiveIntegerField(default=0)
     shop_status = models.CharField(
         max_length=20,
