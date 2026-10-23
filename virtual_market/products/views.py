@@ -108,6 +108,38 @@ class ProductsView(viewsets.ModelViewSet):
         instance.save(update_fields=["views"])
         return super().retrieve(request, *args, **kwargs)
 
+    def _notify_stock_change(self, product, old_stock, new_stock):
+        """Notifie le vendeur si le stock tombe à 0."""
+        from notification.models import Notification
+        if old_stock > 0 and new_stock <= 0:
+            Notification.objects.create(
+                user=product.owner,
+                title="Rupture de stock",
+                message=f"Votre produit « {product.name} » est en rupture de stock.",
+                type=Notification.Type.ALERT,
+            )
+
+    def update(self, request, *args, **kwargs):
+        """Met à jour le produit et notifie si stock tombe à 0."""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        old_stock = instance.stock
+        response = super().update(request, *args, **kwargs)
+        if response.status_code == 200:
+            instance.refresh_from_db()
+            self._notify_stock_change(instance, old_stock, instance.stock)
+        return response
+
+    def partial_update(self, request, *args, **kwargs):
+        """Met à jour partiellement le produit et notifie si stock tombe à 0."""
+        instance = self.get_object()
+        old_stock = instance.stock
+        response = super().partial_update(request, *args, **kwargs)
+        if response.status_code == 200:
+            instance.refresh_from_db()
+            self._notify_stock_change(instance, old_stock, instance.stock)
+        return response
+
     def get_permissions(self):
         if self.action in ("list", "retrieve"):
             # Catalogue public : vitrine accessible à tous (visiteurs compris).
@@ -207,6 +239,8 @@ class ProductsView(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="images", parser_classes=[MultiPartParser, FormParser])
     def upload_images(self, request, pk=None):
         product = self.get_object()
+        # Vérification explicite des permissions
+        self.check_object_permissions(request, product)
         files = request.FILES.getlist("images")
         is_main_flag = request.data.get("is_main", "true").lower() == "true"
         if not files:
@@ -229,6 +263,8 @@ class ProductsView(viewsets.ModelViewSet):
     @action(detail=True, methods=["delete"], url_path="images/(?P<image_id>[\\d]+)")
     def remove_image(self, request, pk=None, image_id=None):
         product = self.get_object()
+        # Vérification explicite des permissions
+        self.check_object_permissions(request, product)
         img = ProductImage.objects.filter(product=product, id=image_id).first()
         if not img:
             return Response({"detail": "Image introuvable."}, status=404)

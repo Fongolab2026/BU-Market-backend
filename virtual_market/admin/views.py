@@ -9,6 +9,7 @@ from commande.models import Order
 from messages.models import Message
 from notification.models import Notification
 from products.models import Product
+from shops.models import BoutiqueRequest
 from users.models import User
 from users.permisions import IsAdminOrSuperAdmin
 

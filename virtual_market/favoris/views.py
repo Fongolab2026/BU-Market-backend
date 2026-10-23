@@ -4,6 +4,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from users.permisions import IsAdminOrSuperAdmin
+from admin.pagination import AdminPageNumberPagination
 from .models import Favorite
 from .serializers import FavoriteSerializer, ReviewSerializer
 
@@ -11,6 +12,7 @@ from .serializers import FavoriteSerializer, ReviewSerializer
 class FavoriteViewSet(viewsets.ModelViewSet):
     serializer_class = FavoriteSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = AdminPageNumberPagination
 
     def get_queryset(self):
         return (
@@ -34,6 +36,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
     queryset = (
         Favorite.objects.select_related("user", "product__owner").order_by("-created_at")
     )
+    pagination_class = AdminPageNumberPagination
 
     def get_permissions(self):
         if self.action in ("create", "list", "retrieve"):

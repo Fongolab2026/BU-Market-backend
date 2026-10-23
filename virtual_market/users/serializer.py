@@ -127,9 +127,9 @@ class AdminUserSerializer(serializers.ModelSerializer):
             "invalid": "Adresse e-mail invalide.",
         },
     )
-    # Accepte les rôles « client » / « merchant » côté front et les convertit en « buyer » / « seller ».
+    # Accepte les rôles « buyer » / « merchant » côté front et les convertit en « buyer » / « seller ».
     role = serializers.ChoiceField(
-        choices=["client", "merchant", "buyer", "seller", "admin", "superadmin"],
+        choices=["buyer", "merchant", "seller", "admin", "superadmin"],
         required=False,
     )
 
@@ -230,11 +230,10 @@ class AdminUserSerializer(serializers.ModelSerializer):
         return value
 
     def validate_role(self, value):
-        """Convertit les rôles front (client/merchant) en rôles back (buyer/seller)."""
+        """Convertit les rôles front (buyer/merchant) en rôles back (buyer/seller)."""
         role_map = {
-            "client": User.Role.BUYER,
-            "merchant": User.Role.SELLER,
             "buyer": User.Role.BUYER,
+            "merchant": User.Role.SELLER,
             "seller": User.Role.SELLER,
             "admin": User.Role.ADMIN,
             "superadmin": User.Role.SUPER_ADMIN,

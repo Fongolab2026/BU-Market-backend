@@ -38,9 +38,11 @@ class FavorisAPITests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["user"], self.user.id)
+        # Les favoris ont maintenant stars=1 par défaut (les avis passent par l'endpoint reviews)
         self.assertEqual(response.data["stars"], 1)
 
-    def test_create_favorite_with_stars(self):
+    def test_create_favorite_ignores_stars(self):
+        """Un favori ignore le champ stars (toujours 1), les avis passent par /reviews/."""
         self.client.force_authenticate(self.user)
         response = self.client.post(
             self.list_url,
@@ -48,7 +50,7 @@ class FavorisAPITests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["stars"], 5)
+        self.assertEqual(response.data["stars"], 1)
 
     def test_rejects_stars_out_of_range(self):
         self.client.force_authenticate(self.user)
@@ -83,4 +85,6 @@ class FavorisAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.client.force_authenticate(self.user)
         response = self.client.get(self.list_url)
-        self.assertEqual(len(response.data), 0)
+        # La réponse est paginée : vérifier results ou count
+        results = response.data.get("results", response.data)
+        self.assertEqual(len(results), 0)
