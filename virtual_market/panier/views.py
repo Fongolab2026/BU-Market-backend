@@ -7,22 +7,10 @@ from rest_framework.response import Response
 
 from commande.models import Order, OrderItem
 from commande.serializers import OrderSerializer
-from notification.models import Notification
 from products.models import Product
 
 from .models import Cart, CartItem
 from .serializers import AddToCartSerializer, CartItemSerializer, CartSerializer
-
-
-def _notify_seller_out_of_stock(product):
-    """Notifie le vendeur quand son produit tombe en rupture de stock."""
-    if product.owner:
-        Notification.objects.create(
-            user=product.owner,
-            title="Rupture de stock",
-            message=f"Votre produit « {product.name} » est en rupture de stock.",
-            type=Notification.Type.ALERT,
-        )
 
 
 def _clean_cart_out_of_stock(cart):
@@ -56,27 +44,26 @@ class CartViewSet(viewsets.ModelViewSet):
         product = serializer.validated_data["product"]
         quantity = serializer.validated_data["quantity"]
 
-        if product.status != Product.Status.ACTIVE:
-            raise ValidationError({"detail": "Ce produit n'est plus disponible."})
+        with transaction.atomic():
+            cart = Cart.objects.select_for_update().get_or_create(user=request.user)[0]
+            product = Product.objects.select_for_update().get(pk=product.pk)
+            if product.status != Product.Status.ACTIVE:
+                raise ValidationError({"detail": "Ce produit n'est plus disponible."})
 
-        cart = self._get_or_create_cart()
-        item = CartItem.objects.filter(cart=cart, product=product).first()
-        new_quantity = (item.quantity if item else 0) + quantity
+            item = CartItem.objects.select_for_update().filter(cart=cart, product=product).first()
+            new_quantity = (item.quantity if item else 0) + quantity
+            if product.stock <= 0:
+                raise ValidationError({"quantity": ["Ce produit est en rupture de stock."]})
+            if new_quantity > product.stock:
+                raise ValidationError(
+                    {"quantity": [f"Stock insuffisant. Disponible : {product.stock}."]}
+                )
 
-        if product.stock <= 0:
-            raise ValidationError(
-                {"quantity": ["Ce produit est en rupture de stock."]}
-            )
-        if new_quantity > product.stock:
-            raise ValidationError(
-                {"quantity": [f"Stock insuffisant. Disponible : {product.stock}."]}
-            )
-
-        if item is None:
-            CartItem.objects.create(cart=cart, product=product, quantity=new_quantity)
-        else:
-            item.quantity = new_quantity
-            item.save(update_fields=["quantity"])
+            if item is None:
+                CartItem.objects.create(cart=cart, product=product, quantity=new_quantity)
+            else:
+                item.quantity = new_quantity
+                item.save(update_fields=["quantity"])
 
         # Nettoyer le panier des produits en rupture
         removed_count = _clean_cart_out_of_stock(cart)
@@ -89,46 +76,57 @@ class CartViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"], url_path="checkout")
     def checkout(self, request):
         """Transforme le panier courant en commande, décrémente le stock puis vide le panier."""
-        cart = Cart.objects.filter(user=request.user).first()
-        items = list(cart.items.select_related("product").all()) if cart else []
+        with transaction.atomic():
+            cart = Cart.objects.select_for_update().filter(user=request.user).first()
+            if cart is None:
+                raise ValidationError({"cart": ["Votre panier est vide."]})
+            items = list(
+                cart.items.select_for_update().select_related("product").all()
+            )
+            if not items:
+                raise ValidationError({"cart": ["Votre panier est vide."]})
 
-        if not items:
-            raise ValidationError({"cart": ["Votre panier est vide."]})
-
-        # On valide tout le panier avant toute écriture pour rester cohérent.
-        for item in items:
-            product = item.product
-            if product.status != Product.Status.ACTIVE:
-                raise ValidationError(
-                    {"cart": [f"Le produit « {product.name} » n'est plus disponible."]}
+            # Lock and re-read stock inside the transaction so concurrent
+            # checkouts cannot both sell the same remaining units.
+            products = {
+                product.pk: product
+                for product in Product.objects.select_for_update().filter(
+                    pk__in=[item.product_id for item in items]
                 )
-            if item.quantity > product.stock:
-                raise ValidationError(
-                    {
-                        "cart": [
+            }
+            for item in items:
+                product = products[item.product_id]
+                if product.status != Product.Status.ACTIVE:
+                    raise ValidationError(
+                        {"cart": [f"Le produit « {product.name} » n'est plus disponible."]}
+                    )
+                if item.quantity > product.stock:
+                    raise ValidationError(
+                        {"cart": [
                             f"Stock insuffisant pour « {product.name} » "
                             f"(disponible : {product.stock})."
-                        ]
-                    }
-                )
+                        ]}
+                    )
 
-        with transaction.atomic():
             order = Order.objects.create(user=request.user)
             for item in items:
-                product = item.product
+                product = products[item.product_id]
+                images = list(product.images.all())
+                main_image = next((image for image in images if image.is_main), None)
+                if main_image is None and images:
+                    main_image = images[0]
                 OrderItem.objects.create(
                     order=order,
                     product=product,
+                    seller=product.owner,
+                    product_name=product.name,
+                    shop_name=product.owner.shop_display_name,
+                    product_image_key=main_image.image.name if main_image else "",
                     quantity=item.quantity,
                     price=product.price,
                 )
-                old_stock = product.stock
                 product.stock -= item.quantity
                 product.save(update_fields=["stock"])
-                
-                # Notifier le vendeur si le stock tombe à 0
-                if old_stock > 0 and product.stock <= 0:
-                    _notify_seller_out_of_stock(product)
             cart.items.all().delete()
 
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
@@ -167,10 +165,13 @@ class CartItemViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
-        cart = serializer.validated_data.get("cart")
-        if cart is not None and cart.user != self.request.user:
-            raise PermissionDenied("Ce panier ne vous appartient pas.")
-        serializer.save()
+        cart, _ = Cart.objects.get_or_create(user=self.request.user)
+        product = serializer.validated_data["product"]
+        if CartItem.objects.filter(cart=cart, product=product).exists():
+            raise ValidationError(
+                {"product": "Ce produit est déjà dans le panier. Utilisez add-item pour ajuster la quantité."}
+            )
+        serializer.save(cart=cart)
 
     def perform_update(self, serializer):
         """Vérifie le stock lors de la mise à jour de quantité."""

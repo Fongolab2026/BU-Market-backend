@@ -28,6 +28,18 @@ class CartItemSerializer(serializers.ModelSerializer):
             "stock",
             "added_at",
         ]
+        # An item can only change quantity through its own cart. Allowing a
+        # client to move it to another cart or swap its product breaks cart
+        # ownership and stock checks.
+        read_only_fields = ["cart", "added_at"]
+
+    def get_fields(self):
+        fields = super().get_fields()
+        # Product can be selected when creating an item, but cannot be swapped
+        # after creation; quantity changes must stay tied to the same SKU.
+        if self.instance is not None:
+            fields["product"].read_only = True
+        return fields
 
     def get_subtotal(self, obj):
         return obj.subtotal
@@ -42,6 +54,10 @@ class CartItemSerializer(serializers.ModelSerializer):
         if product is not None and quantity is not None and quantity > product.stock:
             raise serializers.ValidationError(
                 {"quantity": f"Stock insuffisant. Disponible : {product.stock}."}
+            )
+        if product is not None and product.status != Product.Status.ACTIVE:
+            raise serializers.ValidationError(
+                {"product": "Ce produit n'est plus disponible."}
             )
         return attrs
 

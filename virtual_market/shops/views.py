@@ -2,12 +2,13 @@ from django.db.models import Q
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from admin.pagination import AdminPageNumberPagination
 from categorie.models import Category
 from products.models import Product
+from products.models import ProductImage
 from products.serializers import ProductSerializer
 from users.models import User
 from users.permisions import IsAdminOrSuperAdmin
@@ -24,8 +25,11 @@ class ShopViewSet(viewsets.ReadOnlyModelViewSet):
     )
 
     def get_permissions(self):
-        # Lecture (catalogue / espace vendeur) : utilisateurs connectés.
-        if self.action in ("list", "retrieve", "my_shop", "add_product", "update_info"):
+        # Le catalogue de boutiques validées est public. Les outils vendeur
+        # restent réservés aux utilisateurs connectés.
+        if self.action in ("list", "retrieve"):
+            permission_classes = [AllowAny]
+        elif self.action in ("my_shop", "add_product", "update_info"):
             permission_classes = [IsAuthenticated]
         else:
             # validate / suspend / set_status : administration uniquement.
@@ -78,7 +82,12 @@ class ShopViewSet(viewsets.ReadOnlyModelViewSet):
         shop.save()
         return Response(self.get_serializer(shop).data)
 
-    @action(detail=True, methods=["post"], url_path="products")
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="products",
+        parser_classes=[MultiPartParser, FormParser],
+    )
     def add_product(self, request, pk=None):
         shop = User.objects.filter(pk=pk).first()
         if shop is None:
@@ -86,14 +95,48 @@ class ShopViewSet(viewsets.ReadOnlyModelViewSet):
                 {"detail": "Boutique introuvable."},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        if not (_is_admin(request.user) or shop.pk == request.user.pk):
+        is_admin = _is_admin(request.user)
+        if not (is_admin or shop.pk == request.user.pk):
             return Response(
                 {"detail": "Action non autorisée."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        if not is_admin and (
+            not shop.is_seller or shop.shop_status != User.ShopStatus.VALIDATED
+        ):
+            return Response(
+                {"detail": "La boutique doit être validée avant de publier des produits."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        images = request.FILES.getlist("images")
+        if not images:
+            return Response(
+                {"images": ["Au moins une photo du produit est obligatoire."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         serializer = ProductSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save(owner=shop)
+        if serializer.validated_data.get("stock", 0) <= 0:
+            return Response(
+                {"stock": ["Le stock doit être supérieur à zéro."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from admin.models import PlatformSettings
+
+        require_approval = PlatformSettings.load().moderation.get(
+            "requireProductApproval", False
+        )
+        product_status = Product.Status.INACTIVE if require_approval else Product.Status.ACTIVE
+        product = serializer.save(owner=shop, status=product_status)
+        for index, image in enumerate(images):
+            ProductImage.objects.create(
+                product=product, image=image, is_main=(index == 0)
+            )
+        if require_approval:
+            from publications.models import PublicationRequest
+
+            PublicationRequest.objects.create(product=product, seller=shop)
+        serializer = ProductSerializer(product, context={"request": request})
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["get"], url_path="my-shop")

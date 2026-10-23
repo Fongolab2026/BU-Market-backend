@@ -1,4 +1,5 @@
 from django.db.models import Q
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -43,8 +44,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 # L'acheteur ne peut qu'annuler une commande en attente
                 status_name = request.data.get("status")
                 if status_name == Order.Status.CANCELLED and order.status == Order.Status.PENDING:
-                    order.status = Order.Status.CANCELLED
-                    order.save()
+                    order = self._cancel_order(order)
                     return Response(OrderSerializer(order).data)
                 else:
                     raise PermissionDenied(
@@ -56,7 +56,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         else:
             # Un vendeur ne peut agir que sur une commande contenant ses produits.
             order = (
-                Order.objects.filter(pk=pk, items__product__owner=user)
+                Order.objects.filter(pk=pk, items__seller=user)
                 .distinct()
                 .first()
             )
@@ -68,9 +68,33 @@ class OrderViewSet(viewsets.ModelViewSet):
         if status_name and status_name not in Order.Status.values:
             from rest_framework.exceptions import ValidationError
             raise ValidationError({"status": "Statut de commande invalide."})
-        order.status = status_name or order.status
-        order.save()
+        if status_name == Order.Status.CANCELLED and order.status != Order.Status.CANCELLED:
+            order = self._cancel_order(order)
+        else:
+            order.status = status_name or order.status
+            order.save(update_fields=["status", "updated_at"])
         return Response(OrderSerializer(order).data)
+
+    @staticmethod
+    @transaction.atomic
+    def _cancel_order(order):
+        """Cancel once and return reserved stock exactly once."""
+        order = Order.objects.select_for_update().get(pk=order.pk)
+        if order.status == Order.Status.CANCELLED:
+            return order
+        if order.status != Order.Status.PENDING:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({"status": "Seules les commandes en attente peuvent être annulées."})
+        for item in order.items.select_related("product").select_for_update():
+            # A depleted product may already have been permanently deleted.
+            # In that case the order snapshot remains, but there is no catalog
+            # record to restock.
+            if item.product_id:
+                item.product.stock += item.quantity
+                item.product.save(update_fields=["stock"])
+        order.status = Order.Status.CANCELLED
+        order.save(update_fields=["status", "updated_at"])
+        return order
 
     @action(detail=False, methods=["get"], url_path="shop-orders")
     def shop_orders(self, request):
@@ -80,7 +104,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         user = request.user
         # Récupérer les OrderItems du vendeur
         seller_items = OrderItem.objects.filter(
-            product__owner=user
+            seller=user
         ).select_related("order", "order__user", "product").order_by("-order__created_at")
 
         # Grouper par commande

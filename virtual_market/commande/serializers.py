@@ -1,9 +1,10 @@
+from django.core.files.storage import default_storage
 from rest_framework import serializers
 from .models import Order, OrderItem
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source="product.name", read_only=True)
+    product_name = serializers.CharField(read_only=True)
     subtotal = serializers.SerializerMethodField()
 
     class Meta:
@@ -16,7 +17,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
 class ShopOrderItemSerializer(serializers.ModelSerializer):
     """Article de commande pour la vue vendeur (shop-orders)."""
-    product_name = serializers.CharField(source="product.name", read_only=True)
+    product_name = serializers.CharField(read_only=True)
     subtotal = serializers.SerializerMethodField()
     product_image = serializers.SerializerMethodField()
 
@@ -29,12 +30,15 @@ class ShopOrderItemSerializer(serializers.ModelSerializer):
 
     def get_product_image(self, obj):
         request = self.context.get("request")
-        images = obj.product.images.all()
-        main = next((img for img in images if img.is_main), None) or (images[0] if images else None)
-        if main and main.image:
-            url = main.image.url
-            return request.build_absolute_uri(url) if request else url
-        return None
+        url = None
+        if obj.product_id:
+            images = list(obj.product.images.all())
+            main = next((img for img in images if img.is_main), None) or (images[0] if images else None)
+            if main and main.image:
+                url = main.image.url
+        if not url and obj.product_image_key:
+            url = default_storage.url(obj.product_image_key)
+        return request.build_absolute_uri(url) if request and url else url
 
 
 class ShopOrderSerializer(serializers.Serializer):
@@ -79,9 +83,7 @@ class OrderSerializer(serializers.ModelSerializer):
         return obj.total_price
 
     def get_shop(self, obj):
-        shops = obj.items.select_related("product__owner").values_list(
-            "product__owner__shop_display_name", flat=True
-        ).distinct()
+        shops = obj.items.exclude(shop_name="").values_list("shop_name", flat=True).distinct()
         shop_list = list(shops)
         if len(shop_list) == 1:
             return shop_list[0]

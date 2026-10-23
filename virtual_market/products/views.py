@@ -54,6 +54,9 @@ class ProductsView(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
+        if serializer.validated_data.get("stock", 0) <= 0:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({"stock": "Le stock doit être supérieur à zéro."})
         # Vérifier les paramètres de modération
         from admin.models import PlatformSettings
         settings = PlatformSettings.load()
@@ -102,43 +105,32 @@ class ProductsView(viewsets.ModelViewSet):
             self.get_serializer(product).data, status=status.HTTP_201_CREATED
         )
 
+    def update(self, request, *args, **kwargs):
+        """Return a clear result when setting stock to zero deletes the row."""
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        product_id = instance.pk
+        serializer = self.get_serializer(
+            instance, data=request.data, partial=partial
+        )
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if not Product.objects.filter(pk=product_id).exists():
+            return Response(
+                {
+                    "deleted": True,
+                    "product_id": product_id,
+                    "detail": "Stock épuisé : produit supprimé et vendeur notifié.",
+                },
+                status=status.HTTP_200_OK,
+            )
+        return Response(serializer.data)
+
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         instance.views += 1
         instance.save(update_fields=["views"])
         return super().retrieve(request, *args, **kwargs)
-
-    def _notify_stock_change(self, product, old_stock, new_stock):
-        """Notifie le vendeur si le stock tombe à 0."""
-        from notification.models import Notification
-        if old_stock > 0 and new_stock <= 0:
-            Notification.objects.create(
-                user=product.owner,
-                title="Rupture de stock",
-                message=f"Votre produit « {product.name} » est en rupture de stock.",
-                type=Notification.Type.ALERT,
-            )
-
-    def update(self, request, *args, **kwargs):
-        """Met à jour le produit et notifie si stock tombe à 0."""
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        old_stock = instance.stock
-        response = super().update(request, *args, **kwargs)
-        if response.status_code == 200:
-            instance.refresh_from_db()
-            self._notify_stock_change(instance, old_stock, instance.stock)
-        return response
-
-    def partial_update(self, request, *args, **kwargs):
-        """Met à jour partiellement le produit et notifie si stock tombe à 0."""
-        instance = self.get_object()
-        old_stock = instance.stock
-        response = super().partial_update(request, *args, **kwargs)
-        if response.status_code == 200:
-            instance.refresh_from_db()
-            self._notify_stock_change(instance, old_stock, instance.stock)
-        return response
 
     def get_permissions(self):
         if self.action in ("list", "retrieve"):
@@ -202,7 +194,7 @@ class ProductsView(viewsets.ModelViewSet):
 
         weekly_sales = (
             OrderItem.objects.filter(
-                product__owner=request.user,
+                seller=request.user,
                 order__created_at__gte=since,
             )
             .exclude(order__status="cancelled")
@@ -222,6 +214,11 @@ class ProductsView(viewsets.ModelViewSet):
     def set_status(self, request, pk=None):
         product = self.get_object()
         new_status = request.data.get("status", product.status)
+        if new_status not in Product.Status.values:
+            return Response(
+                {"status": ["Statut de produit invalide."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if new_status == Product.Status.ACTIVE and not product.images.exists():
             return Response(
                 {"detail": "Ajoutez au moins une photo avant de publier ce produit."},

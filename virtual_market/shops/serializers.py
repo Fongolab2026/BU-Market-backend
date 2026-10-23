@@ -137,7 +137,10 @@ class ShopSerializer(serializers.ModelSerializer):
         return obj.sent_messages.count() + obj.received_messages.count()
 
     def get_productList(self, obj):
-        return ProductSerializer(obj.products.all()[:5], many=True).data
+        products = obj.products.filter(status="active").prefetch_related("images")[:5]
+        return ProductSerializer(
+            products, many=True, context=self.context
+        ).data
 
     def get_reviewList(self, obj):
         from favoris.models import Favorite

@@ -124,7 +124,10 @@ class UserViewset(viewsets.ModelViewSet):
     @action(detail=True, methods=["patch"], url_path="status")
     def set_status(self, request, pk=None):
         user = self.get_object()
-        user.status = request.data.get("status", user.status)
+        new_status = request.data.get("status", user.status)
+        if new_status not in User.AccountStatus.values:
+            return Response({"status": ["Statut de compte invalide."]}, status=400)
+        user.status = new_status
         if user.status == User.AccountStatus.SUSPENDED:
             user.is_active = False
         elif user.status == User.AccountStatus.ACTIVE:

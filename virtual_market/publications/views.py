@@ -33,18 +33,39 @@ class PublicationRequestViewSet(viewsets.ModelViewSet):
         return qs.filter(seller=self.request.user)
 
     def perform_create(self, serializer):
-        serializer.save(seller=self.request.user)
+        product = serializer.validated_data["product"]
+        user = self.request.user
+        is_admin = user.is_superuser or user.role in ("admin", "superadmin")
+        if not is_admin and product.owner_id != user.pk:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Vous ne pouvez demander la publication que de vos produits.")
+        if PublicationRequest.objects.filter(
+            product=product, status=PublicationRequest.Status.PENDING
+        ).exists():
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({"product_id": "Une demande de publication est déjà en cours."})
+        serializer.save(seller=user)
 
     def _set_status(self, request, pending_status):
         req = self.get_object()
+        if req.status != PublicationRequest.Status.PENDING:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({"status": "Cette demande a déjà été traitée."})
         req.status = pending_status
         req.save()
         return Response(self.get_serializer(req).data)
 
     @action(detail=True, methods=["patch"], url_path="approve")
     def approve(self, request, pk=None):
+        req = self.get_object()
+        product = req.product
+        if not product.images.exists():
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({"product": "Ajoutez une image avant d'approuver ce produit."})
+        if product.stock <= 0:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({"product": "Le stock doit être positif avant publication."})
         response = self._set_status(request, PublicationRequest.Status.APPROVED)
-        product = self.get_object().product
         product.status = Product.Status.ACTIVE
         product.save(update_fields=["status"])
         return response
