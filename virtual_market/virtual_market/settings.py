@@ -150,6 +150,12 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
+    # Par defaut, tout endpoint exige une authentification. Les rares routes
+    # reellement publiques (inscription, login/refresh, documentation) le
+    # declarent explicitement avec AllowAny.
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
     "DEFAULT_PAGINATION_CLASS": "admin.pagination.AdminPageNumberPagination",
 }
 
@@ -162,6 +168,13 @@ SPECTACULAR_SETTINGS = {
     "COMPONENT_SPLIT_REQUEST": True,
 }
 AUTH_USER_MODEL = 'users.User'
+
+# Connexion par e-mail OU par nom d'utilisateur.
+AUTHENTICATION_BACKENDS = [
+    # Connexion par e-mail uniquement. Le backend hérite de ModelBackend, donc
+    # la gestion des permissions de l'administration Django reste assurée.
+    "users.backends.EmailModelBackend",
+]
 
 # CORS - autorise le frontend pendant le développement
 CORS_ALLOWED_ORIGINS = [

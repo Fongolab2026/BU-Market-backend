@@ -19,11 +19,17 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from .views import ApiRootView
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView
+from users.views import EmailTokenObtainPairView
+
+# La documentation de l'API reste ouverte en developpement, mais exige une
+# authentification en production.
+DOCS_PERMISSION = [AllowAny] if settings.DEBUG else [IsAuthenticated]
 
 urlpatterns = [
-    path('api/auth/login/', TokenObtainPairView.as_view(), name="token_access"),
+    path('api/auth/login/', EmailTokenObtainPairView.as_view(), name="token_access"),
     path('api/auth/refresh/', TokenRefreshView.as_view(), name="token_refresh"),
     path('api/products/', include('products.urls')),
     path('api/users/', include('users.urls')),
@@ -36,8 +42,8 @@ urlpatterns = [
     path('api/admin/', include('admin.urls')),
     path('api/shops/', include('shops.urls')),
     path('api/publications/', include('publications.urls')),
-    path('api/schema/', SpectacularAPIView.as_view(), name="schema"),
-    path('api/docs/', SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    path('api/schema/', SpectacularAPIView.as_view(permission_classes=DOCS_PERMISSION), name="schema"),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name="schema", permission_classes=DOCS_PERMISSION), name="swagger-ui"),
     path('admin/', admin.site.urls),
 ]
 

@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from admin.pagination import AdminPageNumberPagination
+from notification.models import Notification
 from users.models import User
 from .models import Message
 from .serialzer import MessagesSerializer
@@ -150,3 +151,61 @@ class MessagesView(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save(sender=request.user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'], url_path='contact')
+    def contact(self, request):
+        """Message du formulaire « Nous contacter » à destination des superadmins.
+
+        Le client connecté écrit au support : le message est livré dans la
+        messagerie de chaque superadmin (et une notification y est ajoutée).
+        """
+        subject = (request.data.get("subject") or "").strip()
+        content = (request.data.get("message") or "").strip()
+        name = (request.data.get("name") or "").strip()
+        email = (request.data.get("email") or "").strip()
+
+        if not content:
+            return Response(
+                {"detail": "Le message est requis."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        recipients = list(
+            User.objects.filter(
+                role=User.Role.SUPER_ADMIN, is_active=True
+            ).exclude(pk=request.user.pk)
+        )
+        if not recipients:
+            recipients = list(
+                User.objects.filter(is_superuser=True, is_active=True)
+                .exclude(pk=request.user.pk)
+            )
+        if not recipients:
+            return Response(
+                {"detail": "Aucun administrateur disponible pour recevoir le message."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        header = [f"Objet : {subject}"] if subject else []
+        if name:
+            header.append(f"Nom : {name}")
+        if email:
+            header.append(f"E-mail : {email}")
+        body = "\n".join(header + ["", content]) if header else content
+
+        created = []
+        for recipient in recipients:
+            message = Message.objects.create(
+                sender=request.user, receiver=recipient, content=body
+            )
+            Notification.objects.create(
+                user=recipient,
+                title=f"Nouveau message de contact — {subject or request.user.username}",
+                message=content[:280],
+                type=Notification.Type.MESSAGE,
+            )
+            created.append(message)
+
+        return Response(
+            MessagesSerializer(created[0]).data, status=status.HTTP_201_CREATED
+        )

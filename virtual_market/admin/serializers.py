@@ -8,16 +8,13 @@ class ModerationItemSerializer(serializers.Serializer):
 
     id = serializers.IntegerField(read_only=True)
     type = serializers.SerializerMethodField()
-    title = serializers.CharField(source="username", read_only=True)
-    owner = serializers.CharField(source="username", read_only=True)
-    date = serializers.DateTimeField(source="date_joined", read_only=True)
-    status = serializers.SerializerMethodField()
+    title = serializers.CharField(source="company_name", read_only=True)
+    owner = serializers.CharField(source="owner.username", read_only=True)
+    date = serializers.DateTimeField(source="created_at", read_only=True)
+    status = serializers.CharField(source="status", read_only=True)
 
     def get_type(self, obj):
-        return "seller"
-
-    def get_status(self, obj):
-        return "pending"
+        return "shop_request"
 
 
 class PlatformSettingsSerializer(serializers.ModelSerializer):

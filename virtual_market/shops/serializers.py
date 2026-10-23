@@ -3,6 +3,72 @@ from rest_framework import serializers
 from users.models import User
 from products.serializers import ProductSerializer
 from favoris.serializers import ReviewSerializer
+from .models import BoutiqueRequest
+
+
+class BoutiqueOwnerSerializer(serializers.ModelSerializer):
+    """Représentation minimale du propriétaire attendue par l'admin."""
+
+    name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["id", "username", "email", "first_name", "last_name", "name"]
+
+    def get_name(self, obj):
+        full = f"{obj.first_name} {obj.last_name}".strip()
+        return full or obj.username
+
+
+class BoutiqueRequestSerializer(serializers.ModelSerializer):
+    """Serializer « camelCase » consommé par la page /louer-espace et l'admin."""
+
+    companyName = serializers.CharField(source="company_name")
+    ownerName = serializers.CharField(
+        source="owner_name", required=False, allow_blank=True
+    )
+    industry = serializers.CharField(required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(required=False, allow_blank=True)
+    whatsapp = serializers.CharField(required=False, allow_blank=True)
+    slogan = serializers.CharField(required=False, allow_blank=True)
+    facebook = serializers.CharField(required=False, allow_blank=True)
+    instagram = serializers.CharField(required=False, allow_blank=True)
+    tiktok = serializers.CharField(required=False, allow_blank=True)
+    website = serializers.CharField(required=False, allow_blank=True)
+    province = serializers.CharField(required=False, allow_blank=True)
+    commune = serializers.CharField(required=False, allow_blank=True)
+    neighborhood = serializers.CharField(required=False, allow_blank=True)
+    otherNeighborhood = serializers.CharField(
+        source="other_neighborhood", required=False, allow_blank=True
+    )
+    date = serializers.DateTimeField(source="created_at", read_only=True)
+    owner = BoutiqueOwnerSerializer(read_only=True)
+
+    class Meta:
+        model = BoutiqueRequest
+        fields = [
+            "id",
+            "companyName",
+            "ownerName",
+            "industry",
+            "email",
+            "phone",
+            "whatsapp",
+            "slogan",
+            "facebook",
+            "instagram",
+            "tiktok",
+            "website",
+            "province",
+            "commune",
+            "neighborhood",
+            "otherNeighborhood",
+            "status",
+            "date",
+            "owner",
+        ]
+        read_only_fields = ["status"]
 
 
 class ShopSerializer(serializers.ModelSerializer):
@@ -14,6 +80,7 @@ class ShopSerializer(serializers.ModelSerializer):
     reviewCount = serializers.SerializerMethodField()
     createdAt = serializers.DateTimeField(source="date_joined", read_only=True)
     description = serializers.CharField(source="shop_description", read_only=True)
+    shopImage = serializers.SerializerMethodField()
     views = serializers.IntegerField(source="shop_views", read_only=True)
     messages = serializers.SerializerMethodField()
     products = serializers.IntegerField(source="products.count", read_only=True)
@@ -35,6 +102,7 @@ class ShopSerializer(serializers.ModelSerializer):
             "reviewCount",
             "createdAt",
             "description",
+            "shopImage",
             "views",
             "messages",
             "products",
@@ -51,6 +119,13 @@ class ShopSerializer(serializers.ModelSerializer):
 
     def get_category(self, obj):
         return obj.shop_category.name if obj.shop_category else ""
+
+    def get_shopImage(self, obj):
+        if not obj.shop_image:
+            return None
+        request = self.context.get("request")
+        url = obj.shop_image.url
+        return request.build_absolute_uri(url) if request else url
 
     def get_rating(self, obj):
         return round(obj.shop_rating() or 0, 1)

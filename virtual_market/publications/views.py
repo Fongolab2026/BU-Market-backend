@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.db.models import Q
 from products.models import Product
-from users.permisions import IsAdminOrSuperAdmin
+from users.permisions import IsAdminOrSuperAdmin, IsSellerOrAdmin
 from .models import PublicationRequest
 from .serializers import PublicationRequestSerializer
 
@@ -16,6 +16,9 @@ class PublicationRequestViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ("approve", "reject", "update", "partial_update", "destroy", "list", "retrieve"):
             permission_classes = [IsAdminOrSuperAdmin]
+        elif self.action == "create":
+            # Seuls les vendeurs (et admins) soumettent un produit a publication.
+            permission_classes = [IsSellerOrAdmin]
         else:
             permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]

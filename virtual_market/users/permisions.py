@@ -39,6 +39,16 @@ class IsBuyer(BasePermission):
         )
 
 
+class IsSellerOrAdmin(BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        return user.is_authenticated and (
+            user.role == "seller"
+            or user.is_superuser
+            or user.role in ("admin", "superadmin")
+        )
+
+
 class IsOwnerOrAdmin(BasePermission):
     def has_object_permission(self, request, view, obj):
         user = request.user

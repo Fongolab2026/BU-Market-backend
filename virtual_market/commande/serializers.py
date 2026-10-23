@@ -14,6 +14,40 @@ class OrderItemSerializer(serializers.ModelSerializer):
         return obj.subtotal
 
 
+class ShopOrderItemSerializer(serializers.ModelSerializer):
+    """Article de commande pour la vue vendeur (shop-orders)."""
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    subtotal = serializers.SerializerMethodField()
+    product_image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderItem
+        fields = ["id", "product", "product_name", "quantity", "price", "subtotal", "product_image"]
+
+    def get_subtotal(self, obj):
+        return obj.subtotal
+
+    def get_product_image(self, obj):
+        request = self.context.get("request")
+        images = obj.product.images.all()
+        main = next((img for img in images if img.is_main), None) or (images[0] if images else None)
+        if main and main.image:
+            url = main.image.url
+            return request.build_absolute_uri(url) if request else url
+        return None
+
+
+class ShopOrderSerializer(serializers.Serializer):
+    """Sérialiseur pour les commandes du vendeur (shop-orders)."""
+    id = serializers.IntegerField()
+    client = serializers.CharField(source="order.user.username")
+    location = serializers.CharField(source="order.user.adresse", default="")
+    status = serializers.CharField(source="order.status")
+    date = serializers.DateTimeField(source="order.created_at")
+    items = ShopOrderItemSerializer(many=True)
+    total_price = serializers.DecimalField(max_digits=10, decimal_places=2, source="total")
+
+
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     total_price = serializers.SerializerMethodField()
@@ -45,7 +79,12 @@ class OrderSerializer(serializers.ModelSerializer):
         return obj.total_price
 
     def get_shop(self, obj):
-        first_item = obj.items.select_related("product__owner").first()
-        if first_item:
-            return first_item.product.owner.shop_display_name
+        shops = obj.items.select_related("product__owner").values_list(
+            "product__owner__shop_display_name", flat=True
+        ).distinct()
+        shop_list = list(shops)
+        if len(shop_list) == 1:
+            return shop_list[0]
+        elif len(shop_list) > 1:
+            return f"{shop_list[0]} + {len(shop_list) - 1} autre(s)"
         return ""

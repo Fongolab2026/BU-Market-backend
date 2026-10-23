@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from categorie.models import Category
 from .models import Product, ProductImage
 
 
@@ -25,6 +26,27 @@ class ProductSerializer(serializers.ModelSerializer):
     shopName = serializers.SerializerMethodField()
     shopCategory = serializers.SerializerMethodField()
     shopStatus = serializers.SerializerMethodField()
+    details = serializers.CharField(required=False, allow_blank=True, default="")
+    name = serializers.CharField(max_length=100, error_messages={"blank": "Le nom du produit est obligatoire."})
+    price = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        error_messages={"required": "Le prix est obligatoire.", "invalid": "Le prix doit être un nombre."},
+    )
+    stock = serializers.IntegerField(
+        required=False,
+        default=0,
+        min_value=0,
+        error_messages={"invalid": "Le stock doit être un entier.", "min_value": "Le stock ne peut pas être négatif."},
+    )
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(),
+        error_messages={
+            "required": "La catégorie est obligatoire.",
+            "does_not_exist": "Cette catégorie n'existe pas.",
+            "incorrect_type": "Catégorie invalide.",
+        },
+    )
 
     class Meta:
         model = Product

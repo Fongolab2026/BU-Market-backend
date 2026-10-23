@@ -62,9 +62,9 @@ class AdminStatsView(APIView):
             ).count()
 
         users = User.objects.all()
-        shops = User.objects.filter(role="seller", is_active=True)
+        shops = User.objects.filter(role="seller", shop_status=User.ShopStatus.VALIDATED)
         products = Product.objects.all()
-        pending = User.objects.filter(role="seller", is_active=False)
+        pending_shops = BoutiqueRequest.objects.filter(status=BoutiqueRequest.Status.PENDING)
 
         stats = [
             _kpi("users", "Utilisateurs", users.count(), recent("date_joined", users), previous("date_joined", users)),
@@ -85,9 +85,9 @@ class AdminStatsView(APIView):
             _kpi(
                 "moderation",
                 "À modérer",
-                pending.count(),
-                recent("date_joined", pending),
-                previous("date_joined", pending),
+                pending_shops.count(),
+                recent("created_at", pending_shops),
+                previous("created_at", pending_shops),
                 invert=True,
             ),
         ]
@@ -98,7 +98,7 @@ class AdminStatsView(APIView):
         ]
 
         queue = ModerationItemSerializer(
-            pending.order_by("-date_joined")[:5], many=True
+            pending_shops.order_by("-created_at")[:5], many=True
         ).data
 
         return Response(
@@ -167,12 +167,12 @@ class AdminActivityView(APIView):
 
 
 class AdminModerationQueueView(ListAPIView):
-    """GET /api/admin/moderation-queue/ — comptes boutiques en attente de validation."""
+    """GET /api/admin/moderation-queue/ — demandes de boutique en attente de validation."""
 
     permission_classes = [IsAdminOrSuperAdmin]
     serializer_class = ModerationItemSerializer
     pagination_class = AdminPageNumberPagination
-    queryset = User.objects.filter(role="seller", is_active=False).order_by("-date_joined")
+    queryset = BoutiqueRequest.objects.filter(status=BoutiqueRequest.Status.PENDING).select_related("owner").order_by("-created_at")
 
 
 class AdminMetaView(APIView):

@@ -14,7 +14,7 @@ class Product(models.Model):
         on_delete=models.PROTECT,
         related_name="products"
         )
-    details = models.TextField()
+    details = models.TextField(blank=True, default="")
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="products")
     stock = models.PositiveIntegerField(default=0)
     status = models.CharField(
@@ -39,7 +39,7 @@ class ProductImage(models.Model):
         on_delete=models.CASCADE,
         related_name="images"
         )
-    image = models.ImageField(upload_to="products/")
+    image = models.ImageField(upload_to="products/", null=False)
     is_main = models.BooleanField(default=False, verbose_name="Image principale")
 
     class Meta:

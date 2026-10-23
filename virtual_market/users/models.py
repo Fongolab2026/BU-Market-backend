@@ -1,5 +1,6 @@
 from django.db import models
-from django.db.models import Avg
+from django.db.models import Avg, Q
+from django.db.models.functions import Lower
 from django.contrib.auth.models import AbstractUser
 from categorie.models import Category
 
@@ -46,12 +47,32 @@ class User(AbstractUser):
         related_name="shops",
     )
     shop_description = models.TextField(blank=True, default="")
+    shop_image = models.ImageField(upload_to="shops/", blank=True, null=True)
     shop_views = models.PositiveIntegerField(default=0)
     shop_status = models.CharField(
         max_length=20,
         choices=ShopStatus.choices,
         default=ShopStatus.PENDING,
     )
+
+    class Meta(AbstractUser.Meta):
+        constraints = [
+            # Une adresse e-mail ne peut appartenir qu'à un seul compte
+            # (comparaison insensible à la casse). Les comptes sans e-mail
+            # restent autorisés.
+            models.UniqueConstraint(
+                Lower("email"),
+                condition=~Q(email=""),
+                name="unique_email_ci",
+            ),
+            # Un numéro de téléphone ne peut être rattaché qu'à un seul compte.
+            # Les comptes sans téléphone (valeur vide) restent autorisés.
+            models.UniqueConstraint(
+                fields=["phone"],
+                condition=~Q(phone=""),
+                name="unique_phone",
+            ),
+        ]
 
     @property
     def is_seller(self):
@@ -64,10 +85,10 @@ class User(AbstractUser):
     def shop_rating(self):
         from favoris.models import Favorite
         return (
-            Favorite.objects.filter(product__owner=self)
+            Favorite.objects.filter(product__owner=self, status=Favorite.Status.VISIBLE)
             .aggregate(avg=Avg("stars"))["avg"]
         )
 
     def shop_review_count(self):
         from favoris.models import Favorite
-        return Favorite.objects.filter(product__owner=self).count()
+        return Favorite.objects.filter(product__owner=self, status=Favorite.Status.VISIBLE).count()
