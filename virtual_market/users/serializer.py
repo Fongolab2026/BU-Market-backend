@@ -109,8 +109,8 @@ class AdminUserSerializer(serializers.ModelSerializer):
     """Serializer « camelCase » consommé par l'interface admin."""
 
     id = serializers.IntegerField(read_only=True)
-    firstName = serializers.CharField(source="first_name")
-    lastName = serializers.CharField(source="last_name")
+    firstName = serializers.CharField(source="first_name", required=False, allow_blank=True)
+    lastName = serializers.CharField(source="last_name", required=False, allow_blank=True)
     joinedAt = serializers.DateTimeField(source="date_joined", read_only=True)
     lastActive = serializers.DateTimeField(source="last_active", read_only=True)
     location = serializers.CharField(source="adresse", required=False, allow_blank=True)
