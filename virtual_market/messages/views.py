@@ -50,7 +50,18 @@ class MessagesView(viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
-        serializer.save(sender=self.request.user)
+        message = serializer.save(sender=self.request.user)
+        self._notify_receiver(message)
+
+    @staticmethod
+    def _notify_receiver(message):
+        """Notify the recipient when a new message arrives in their inbox."""
+        Notification.objects.create(
+            user=message.receiver,
+            title=f"Nouveau message de {message.sender.username}",
+            message=message.content[:280],
+            type=Notification.Type.MESSAGE,
+        )
 
     def perform_update(self, serializer):
         # Only the author can rewrite a message; the receiver keeps the original
@@ -149,7 +160,8 @@ class MessagesView(viewsets.ModelViewSet):
             }
         )
         serializer.is_valid(raise_exception=True)
-        serializer.save(sender=request.user)
+        message = serializer.save(sender=request.user)
+        self._notify_receiver(message)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'], url_path='contact')

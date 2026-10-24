@@ -143,7 +143,10 @@ class ShopSerializer(serializers.ModelSerializer):
         ).data
 
     def get_reviewList(self, obj):
-        from favoris.models import Favorite
+        from favoris.models import Review
 
-        reviews = Favorite.objects.filter(product__owner=obj)[:5]
+        reviews = Review.objects.filter(
+            product__owner=obj,
+            status=Review.Status.VISIBLE,
+        ).select_related("user", "product")[:5]
         return ReviewSerializer(reviews, many=True).data

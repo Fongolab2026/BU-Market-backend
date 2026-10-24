@@ -22,7 +22,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         return Order.objects.filter(user=user).order_by("-created_at")
 
     def get_permissions(self):
-        if self.action in ("update", "partial_update", "destroy"):
+        if self.action in ("create", "update", "partial_update", "destroy"):
             permission_classes = [IsAdminOrSuperAdmin]
         else:
             # list / retrieve / create / set_status / shop-orders
@@ -63,6 +63,11 @@ class OrderViewSet(viewsets.ModelViewSet):
             if order is None:
                 raise PermissionDenied(
                     "Vous ne pouvez pas modifier cette commande."
+                )
+            seller_ids = set(order.items.values_list("seller_id", flat=True).distinct())
+            if seller_ids != {user.pk}:
+                raise PermissionDenied(
+                    "Cette commande concerne plusieurs boutiques. Seul un administrateur peut modifier son statut."
                 )
         status_name = request.data.get("status")
         if status_name and status_name not in Order.Status.values:
@@ -109,13 +114,14 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         # Grouper par commande
         from collections import defaultdict
-        orders_dict = defaultdict(lambda: {"order": None, "items": [], "total": 0})
+        orders_dict = defaultdict(lambda: {"order": None, "items": [], "total": 0, "seller_ids": set()})
         for item in seller_items:
             order_id = item.order_id
             if orders_dict[order_id]["order"] is None:
                 orders_dict[order_id]["order"] = item.order
             orders_dict[order_id]["items"].append(item)
             orders_dict[order_id]["total"] += item.subtotal
+            orders_dict[order_id]["seller_ids"].add(item.seller_id)
 
         # Appliquer les filtres
         search = request.query_params.get("search")
@@ -124,6 +130,9 @@ class OrderViewSet(viewsets.ModelViewSet):
         filtered_orders = []
         for order_data in orders_dict.values():
             order = order_data["order"]
+            order_data["seller_ids"] = set(
+                order.items.values_list("seller_id", flat=True).distinct()
+            )
             if search:
                 filters = (
                     Q(user__username__icontains=search)

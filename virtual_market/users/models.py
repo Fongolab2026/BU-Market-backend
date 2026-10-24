@@ -83,12 +83,12 @@ class User(AbstractUser):
         return self.shop_name or self.username
 
     def shop_rating(self):
-        from favoris.models import Favorite
+        from favoris.models import Review
         return (
-            Favorite.objects.filter(product__owner=self, status=Favorite.Status.VISIBLE)
+            Review.objects.filter(product__owner=self, status=Review.Status.VISIBLE)
             .aggregate(avg=Avg("stars"))["avg"]
         )
 
     def shop_review_count(self):
-        from favoris.models import Favorite
-        return Favorite.objects.filter(product__owner=self, status=Favorite.Status.VISIBLE).count()
+        from favoris.models import Review
+        return Review.objects.filter(product__owner=self, status=Review.Status.VISIBLE).count()

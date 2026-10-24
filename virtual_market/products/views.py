@@ -229,6 +229,26 @@ class ProductsView(viewsets.ModelViewSet):
                 {"detail": "Impossible de publier un produit en rupture de stock. Ajoutez du stock d'abord."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        user = request.user
+        is_admin = user.is_superuser or user.role in ("admin", "superadmin")
+        if new_status == Product.Status.ACTIVE and not is_admin:
+            from admin.models import PlatformSettings
+
+            if PlatformSettings.load().moderation.get("requireProductApproval", False):
+                if product.status != Product.Status.ACTIVE:
+                    from publications.models import PublicationRequest
+
+                    PublicationRequest.objects.get_or_create(
+                        product=product,
+                        status=PublicationRequest.Status.PENDING,
+                        defaults={"seller": product.owner},
+                    )
+                    product.status = Product.Status.INACTIVE
+                    product.save(update_fields=["status"])
+                    return Response(
+                        {**self.get_serializer(product).data, "publication_pending": True},
+                        status=status.HTTP_202_ACCEPTED,
+                    )
         product.status = new_status
         product.save()
         return Response(self.get_serializer(product).data)

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Favorite
+from .models import Favorite, Review
 
 
 class FavoriteSerializer(serializers.ModelSerializer):
@@ -56,19 +56,21 @@ class FavoriteSerializer(serializers.ModelSerializer):
 
 
 class ReviewSerializer(serializers.ModelSerializer):
+    authorId = serializers.IntegerField(source="user_id", read_only=True)
     author = serializers.CharField(source="user.username", read_only=True)
     authorAvatar = serializers.SerializerMethodField()
-    note = serializers.IntegerField(source="stars", read_only=True)
-    comment = serializers.CharField(source="comment", read_only=True)
+    note = serializers.IntegerField(source="stars", min_value=1, max_value=5)
+    comment = serializers.CharField(allow_blank=True, required=False)
     date = serializers.DateTimeField(source="created_at", read_only=True)
     shopId = serializers.IntegerField(source="product.owner_id", read_only=True)
     shopName = serializers.SerializerMethodField()
 
     class Meta:
-        model = Favorite
+        model = Review
         fields = [
             "id",
             "product",
+            "authorId",
             "author",
             "authorAvatar",
             "note",

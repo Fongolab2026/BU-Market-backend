@@ -50,6 +50,10 @@ class ShopOrderSerializer(serializers.Serializer):
     date = serializers.DateTimeField(source="order.created_at")
     items = ShopOrderItemSerializer(many=True)
     total_price = serializers.DecimalField(max_digits=10, decimal_places=2, source="total")
+    can_update_status = serializers.SerializerMethodField()
+
+    def get_can_update_status(self, obj):
+        return obj.get("seller_ids") == {obj["items"][0].seller_id}
 
 
 class OrderSerializer(serializers.ModelSerializer):
