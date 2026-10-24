@@ -1,4 +1,5 @@
 from django.db.models import Q
+from django.db import transaction
 from django.db.models import ProtectedError, RestrictedError
 from django.utils import timezone
 from .serializer import UserSerializer, AdminUserSerializer
@@ -37,6 +38,21 @@ class UserViewset(viewsets.ModelViewSet):
         return user.is_authenticated and (
             user.is_superuser or user.role in ("admin", "superadmin")
         )
+
+    def perform_create(self, serializer):
+        # Le compte et sa notification de bienvenue sont créés ensemble afin
+        # que chaque nouvel utilisateur retrouve ce premier message dans son
+        # centre de notifications dès sa première connexion.
+        from notification.models import Notification
+
+        with transaction.atomic():
+            user = serializer.save()
+            Notification.objects.create(
+                user=user,
+                title="Bienvenue sur BU-Market",
+                message="Votre compte a été créé avec succès. Bienvenue dans la communauté BU-Market !",
+                type=Notification.Type.SYSTEM,
+            )
 
     def get_queryset(self):
         qs = super().get_queryset()
