@@ -261,12 +261,19 @@ class BoutiqueRequestViewSet(viewsets.ModelViewSet):
         from notification.models import Notification
         from users.models import User
 
-        boutique = serializer.save(owner=self.request.user)
-        settings = PlatformSettings.load()
-        require_approval = settings.moderation.get(
-            "requireShopApproval", False
+        boutique = serializer.save(
+            owner=self.request.user,
+            status=BoutiqueRequest.Status.PENDING,
         )
-        if require_approval and settings.notifications.get("newShopPending", False):
+        # La demande reste en attente jusqu'à l'action explicite d'un administrateur.
+        # Garder aussi le statut du compte vendeur cohérent avec celui de la demande.
+        owner = boutique.owner
+        if owner.shop_status != User.ShopStatus.PENDING:
+            owner.shop_status = User.ShopStatus.PENDING
+            owner.save(update_fields=["shop_status"])
+
+        settings = PlatformSettings.load()
+        if settings.notifications.get("newShopPending", False):
             admins = User.objects.filter(role__in=("admin", "superadmin"))
             Notification.objects.bulk_create([
                 Notification(
@@ -277,10 +284,6 @@ class BoutiqueRequestViewSet(viewsets.ModelViewSet):
                 )
                 for admin in admins
             ])
-        elif not require_approval:
-            boutique.status = BoutiqueRequest.Status.VALIDATED
-            boutique.save(update_fields=["status"])
-            self._activate_shop_owner(boutique)
 
     @staticmethod
     def _activate_shop_owner(boutique):
@@ -333,10 +336,24 @@ class BoutiqueRequestViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["patch"], url_path="validate")
     def validate(self, request, pk=None):
         boutique = self.get_object()
+        was_pending = boutique.status == BoutiqueRequest.Status.PENDING
         boutique.status = BoutiqueRequest.Status.VALIDATED
         boutique.save(update_fields=["status"])
         self._activate_shop_owner(boutique)
         owner = boutique.owner
+
+        if was_pending:
+            from notification.models import Notification
+
+            Notification.objects.create(
+                user=owner,
+                title="Votre boutique a été validée",
+                message=(
+                    f"Votre demande de location pour « {boutique.company_name} » "
+                    "a été approuvée. Votre boutique est maintenant active."
+                ),
+                type=Notification.Type.SHOP,
+            )
 
         # Retourner aussi les infos utilisateur mises à jour pour que le front puisse rafraîchir la session
         from users.serializer import UserSerializer
