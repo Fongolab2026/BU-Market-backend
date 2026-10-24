@@ -1,8 +1,9 @@
 from django.db.models import Q
+from django.db.models import ProtectedError, RestrictedError
 from django.utils import timezone
 from .serializer import UserSerializer, AdminUserSerializer
 from .models import User
-from rest_framework import viewsets, serializers
+from rest_framework import viewsets, serializers, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -19,6 +20,11 @@ class UserViewset(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         if self.action == "create":
+            # Un administrateur peut creer un compte avec un role precis ;
+            # l'inscription publique reste limitee au serializer utilisateur
+            # (le champ role y est en lecture seule).
+            if self._is_admin(self.request.user):
+                return AdminUserSerializer
             return UserSerializer
         user = self.request.user
         if user.is_authenticated and (
@@ -50,13 +56,52 @@ class UserViewset(viewsets.ModelViewSet):
                 | Q(last_name__icontains=search)
             )
         if role:
-            qs = qs.filter(role=role)
+            # L'interface admin utilise des libelles metier (merchant, client) et
+            # regroupe les superadmins avec les admins. On les traduit vers les
+            # valeurs reellement stockees dans User.Role.
+            role_aliases = {
+                "merchant": "seller",
+                "client": "buyer",
+            }
+            role = role_aliases.get(role, role)
+            if role == "admin":
+                qs = qs.filter(role__in=["admin", "superadmin"])
+            else:
+                qs = qs.filter(role=role)
         if status:
             qs = qs.filter(status=status)
         return qs
 
     def perform_update(self, serializer):
         serializer.save(last_active=timezone.now())
+
+    def destroy(self, request, *args, **kwargs):
+        """Supprime un compte en refusant les cas qui casseraient l'historique.
+
+        - Un administrateur ne peut pas supprimer son propre compte.
+        - Un compte lie a des commandes (Order.user est en PROTECT) ne peut pas
+          etre supprime : on renvoie un message clair au lieu d'une erreur 500.
+        """
+        instance = self.get_object()
+        if instance.pk == request.user.pk:
+            return Response(
+                {"detail": "Vous ne pouvez pas supprimer votre propre compte."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            self.perform_destroy(instance)
+        except (ProtectedError, RestrictedError):
+            return Response(
+                {
+                    "detail": (
+                        "Ce compte est lié à des commandes et ne peut pas être "
+                        "supprimé. Suspendez-le à la place pour conserver "
+                        "l'historique."
+                    )
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def get_permissions(self):
         if self.action == "create":
