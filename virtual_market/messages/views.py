@@ -90,6 +90,11 @@ class MessagesView(viewsets.ModelViewSet):
         queryset = self.get_queryset().filter(sender=request.user)
         return self._paginated_response(queryset)
 
+    @action(detail=False, methods=['get'], url_path='unread-count')
+    def unread_count(self, request):
+        count = Message.objects.filter(receiver=request.user, is_read=False).count()
+        return Response({"count": count})
+
     @action(detail=False, methods=['get'], url_path=r'conversation/(?P<user_id>\d+)')
     def conversation(self, request, user_id=None):
         other = get_object_or_404(User, pk=user_id)
