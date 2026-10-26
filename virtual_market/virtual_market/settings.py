@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import sys
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -112,6 +113,12 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
+
+# `manage.py test` crée beaucoup d'utilisateurs : le hachage par défaut
+# (PBKDF2, ~1,2 M d'itérations) ralentit fortement la suite. On bascule sur un
+# algorithme rapide uniquement pendant les tests — jamais en production.
+if "test" in sys.argv:
+    PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
 
 # Internationalization

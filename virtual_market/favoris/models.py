@@ -4,6 +4,19 @@ from django.db import models
 from products.models import Product
 
 
+class FavoriteQuerySet(models.QuerySet):
+    """Sous-ensemble des lignes qui sont de vrais avis.
+
+    Une ligne `Favorite` porte à la fois « favori » et « avis »
+    (`unique_together` user/product) : les simples favoris sont créés avec
+    `comment=""`, donc un commentaire non vide identifie un avis — sans
+    colonne supplémentaire ni migration.
+    """
+
+    def reviews(self):
+        return self.exclude(comment="").exclude(comment__isnull=True)
+
+
 class Favorite(models.Model):
     class Status(models.TextChoices):
         VISIBLE = "visible", "Visible"
@@ -31,6 +44,8 @@ class Favorite(models.Model):
         default=Status.VISIBLE,
     )
     created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = FavoriteQuerySet.as_manager()
 
     class Meta:
         unique_together = ("user", "product")

@@ -3,7 +3,7 @@ from rest_framework import serializers
 from users.models import User
 from products.serializers import ProductSerializer
 from favoris.serializers import ReviewSerializer
-from .models import BoutiqueRequest
+from .models import BoutiqueRequest, ShopReview
 
 
 class BoutiqueOwnerSerializer(serializers.ModelSerializer):
@@ -145,5 +145,70 @@ class ShopSerializer(serializers.ModelSerializer):
     def get_reviewList(self, obj):
         from favoris.models import Favorite
 
-        reviews = Favorite.objects.filter(product__owner=obj)[:5]
+        # Uniquement les vrais avis (les favoris sans commentaire sont exclus).
+        reviews = Favorite.objects.reviews().filter(product__owner=obj)[:5]
         return ReviewSerializer(reviews, many=True).data
+
+
+class ShopReviewSerializer(serializers.ModelSerializer):
+    """Avis déposé sur une boutique entière (voir `ShopReview`)."""
+
+    author = serializers.CharField(source="user.username", read_only=True)
+    authorAvatar = serializers.SerializerMethodField()
+    authorId = serializers.IntegerField(source="user.id", read_only=True)
+    note = serializers.IntegerField(source="stars", min_value=1, max_value=5)
+    comment = serializers.CharField(
+        trim_whitespace=True, min_length=3, max_length=2000
+    )
+    date = serializers.DateTimeField(source="created_at", read_only=True)
+    shopId = serializers.IntegerField(source="shop.id", read_only=True)
+    shopName = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ShopReview
+        fields = [
+            "id",
+            "shop",
+            "author",
+            "authorAvatar",
+            "authorId",
+            "note",
+            "comment",
+            "date",
+            "status",
+            "shopId",
+            "shopName",
+        ]
+        read_only_fields = ["status"]
+
+    def validate_shop(self, shop):
+        if shop.role != User.Role.SELLER:
+            raise serializers.ValidationError(
+                "Seules les boutiques de vendeurs peuvent être notées."
+            )
+        if shop.shop_status != User.ShopStatus.VALIDATED:
+            raise serializers.ValidationError(
+                "Cette boutique n'est pas encore validée."
+            )
+        return shop
+
+    def validate(self, attrs):
+        if (
+            self.instance is not None
+            and "shop" in attrs
+            and attrs["shop"].pk != self.instance.shop_id
+        ):
+            raise serializers.ValidationError(
+                "Impossible de changer la boutique associée à un avis."
+            )
+        return attrs
+
+    def get_authorAvatar(self, obj):
+        if not obj.user or not obj.user.profile_pic:
+            return None
+        request = self.context.get("request")
+        url = obj.user.profile_pic.url
+        return request.build_absolute_uri(url) if request is not None else url
+
+    def get_shopName(self, obj):
+        return obj.shop.shop_display_name

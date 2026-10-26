@@ -56,10 +56,22 @@ class FavoriteSerializer(serializers.ModelSerializer):
 
 
 class ReviewSerializer(serializers.ModelSerializer):
+    """Avis publié sur un produit.
+
+    Lecture : publique quand la liste est filtrée par produit (`?product=`),
+    sinon limitée à ses propres avis. Écriture : `note` (1-5) et `comment`
+    sont obligatoires — un avis sans texte n'a pas de sens.
+    """
+
     author = serializers.CharField(source="user.username", read_only=True)
     authorAvatar = serializers.SerializerMethodField()
-    note = serializers.IntegerField(source="stars", read_only=True)
-    comment = serializers.CharField(source="comment", read_only=True)
+    authorId = serializers.IntegerField(source="user.id", read_only=True)
+    note = serializers.IntegerField(source="stars", min_value=1, max_value=5)
+    # DRF refuse `source` identique au nom du champ (AssertionError) : on
+    # déclare le champ simplement.
+    comment = serializers.CharField(
+        trim_whitespace=True, min_length=3, max_length=2000
+    )
     date = serializers.DateTimeField(source="created_at", read_only=True)
     shopId = serializers.IntegerField(source="product.owner_id", read_only=True)
     shopName = serializers.SerializerMethodField()
@@ -71,6 +83,7 @@ class ReviewSerializer(serializers.ModelSerializer):
             "product",
             "author",
             "authorAvatar",
+            "authorId",
             "note",
             "comment",
             "date",
@@ -79,6 +92,18 @@ class ReviewSerializer(serializers.ModelSerializer):
             "shopName",
         ]
         read_only_fields = ["status"]
+
+    def validate(self, attrs):
+        # Un avis ne peut pas être basculé sur un autre produit après coup.
+        if (
+            self.instance is not None
+            and "product" in attrs
+            and attrs["product"].pk != self.instance.product_id
+        ):
+            raise serializers.ValidationError(
+                "Impossible de changer le produit associé à un avis."
+            )
+        return attrs
 
     def get_authorAvatar(self, obj):
         if not obj.user or not obj.user.profile_pic:

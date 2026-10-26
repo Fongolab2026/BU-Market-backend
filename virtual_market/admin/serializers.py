@@ -11,7 +11,9 @@ class ModerationItemSerializer(serializers.Serializer):
     title = serializers.CharField(source="company_name", read_only=True)
     owner = serializers.CharField(source="owner.username", read_only=True)
     date = serializers.DateTimeField(source="created_at", read_only=True)
-    status = serializers.CharField(source="status", read_only=True)
+    # `source="status"` est refusé par DRF (AssertionError : source identique
+    # au nom du champ).
+    status = serializers.CharField(read_only=True)
 
     def get_type(self, obj):
         return "shop_request"

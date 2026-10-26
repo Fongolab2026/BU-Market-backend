@@ -1,5 +1,5 @@
 from django.db import models
-from django.db.models import Avg, Q
+from django.db.models import Q
 from django.db.models.functions import Lower
 from django.contrib.auth.models import AbstractUser
 from categorie.models import Category
@@ -82,13 +82,26 @@ class User(AbstractUser):
     def shop_display_name(self):
         return self.shop_name or self.username
 
-    def shop_rating(self):
+    def _shop_review_notes(self):
+        """Notes visibles attribuées à la boutique.
+
+        Deux sources distinctes : les avis laissés sur ses produits (favoris
+        portant un commentaire) et les avis laissés sur la boutique elle-même.
+        """
         from favoris.models import Favorite
-        return (
-            Favorite.objects.filter(product__owner=self, status=Favorite.Status.VISIBLE)
-            .aggregate(avg=Avg("stars"))["avg"]
-        )
+        from shops.models import ShopReview
+
+        product_notes = Favorite.objects.reviews().filter(
+            product__owner=self, status=Favorite.Status.VISIBLE
+        ).values_list("stars", flat=True)
+        shop_notes = ShopReview.objects.filter(
+            shop=self, status=ShopReview.Status.VISIBLE
+        ).values_list("stars", flat=True)
+        return list(product_notes) + list(shop_notes)
+
+    def shop_rating(self):
+        notes = self._shop_review_notes()
+        return sum(notes) / len(notes) if notes else None
 
     def shop_review_count(self):
-        from favoris.models import Favorite
-        return Favorite.objects.filter(product__owner=self, status=Favorite.Status.VISIBLE).count()
+        return len(self._shop_review_notes())

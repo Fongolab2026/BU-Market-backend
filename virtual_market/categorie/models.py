@@ -7,6 +7,9 @@ class Category(models.Model):
     slug = models.SlugField(max_length=120, unique=True, blank=True)
     description = models.TextField(blank=True)
     icon = models.CharField(max_length=50, blank=True, default="")
+    # Visuel de la catégorie (cartes vendeur / vitrine). S'il est absent,
+    # l'interface affiche un visuel de repli construit à partir de `icon`.
+    image = models.ImageField(upload_to="categories/", blank=True, null=True)
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
