@@ -4,7 +4,7 @@ from notification.models import Notification
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from favoris.models import Favorite
+from favoris.models import Favorite, Review
 from products.models import Product
 from users.models import User
 
@@ -176,8 +176,8 @@ class ReviewAPITests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_existing_favorite_is_promoted_to_review(self):
-        """Un favori et un avis partagent la ligne : le favori est mis à jour."""
+    def test_existing_favorite_stays_a_favorite_when_reviewing(self):
+        """Favori et avis sont deux lignes distinctes."""
         self.client.force_authenticate(self.buyer)
         favorite_url = reverse("favorite-list")
         self.client.post(favorite_url, {"product": self.product.id}, format="json")
@@ -189,15 +189,21 @@ class ReviewAPITests(APITestCase):
             1,
         )
         self.assertEqual(
-            Favorite.objects.reviews().filter(user=self.buyer).count(), 1
+            Favorite.objects.exclude(comment="").count(),
+            0,
+            "Un favori ne porte plus d'avis : la note vit dans Review.",
+        )
+        self.assertEqual(
+            Review.objects.filter(user=self.buyer, product=self.product).count(),
+            1,
         )
 
     def test_public_list_returns_only_visible_reviews_of_the_product(self):
         self.client.force_authenticate(self.buyer)
         self.client.post(self.list_url, self.payload, format="json")
         self.client.force_authenticate(self.other)
-        hidden = Favorite.objects.reviews().first()
-        hidden.status = Favorite.Status.HIDDEN
+        hidden = Review.objects.get(user=self.buyer, product=self.product)
+        hidden.status = Review.Status.HIDDEN
         hidden.save()
 
         self.client.force_authenticate(user=None)

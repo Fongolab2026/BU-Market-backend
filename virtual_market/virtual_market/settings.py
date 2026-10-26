@@ -189,3 +189,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
 ]
 CORS_ALLOW_CREDENTIALS = True
+
+# Type de cle primaire par defaut. Toutes les migrations du projet utilisent
+# deja BigAutoField ; le declarer ici evite les avertissements W042 et les
+# migrations fantomes proposees par makemigrations.
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

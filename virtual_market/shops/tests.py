@@ -171,7 +171,7 @@ class ShopReviewAPITests(APITestCase):
     def test_shop_rating_aggregates_product_and_shop_reviews(self):
         """La note de la boutique cumule avis produits et avis de boutique."""
         from categorie.models import Category
-        from favoris.models import Favorite
+        from favoris.models import Review
         from products.models import Product
 
         category = Category.objects.create(name="Outillage")
@@ -183,7 +183,7 @@ class ShopReviewAPITests(APITestCase):
             owner=self.seller,
             stock=10,
         )
-        Favorite.objects.create(
+        Review.objects.create(
             user=self.confrere, product=product, stars=3, comment="Correct."
         )
         ShopReview.objects.create(

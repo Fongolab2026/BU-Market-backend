@@ -85,14 +85,15 @@ class User(AbstractUser):
     def _shop_review_notes(self):
         """Notes visibles attribuées à la boutique.
 
-        Deux sources distinctes : les avis laissés sur ses produits (favoris
-        portant un commentaire) et les avis laissés sur la boutique elle-même.
+        Deux sources distinctes : les avis laissés sur ses produits
+        (`favoris.Review`) et les avis laissés sur la boutique elle-même
+        (`shops.ShopReview`).
         """
-        from favoris.models import Favorite
+        from favoris.models import Review
         from shops.models import ShopReview
 
-        product_notes = Favorite.objects.reviews().filter(
-            product__owner=self, status=Favorite.Status.VISIBLE
+        product_notes = Review.objects.filter(
+            product__owner=self, status=Review.Status.VISIBLE
         ).values_list("stars", flat=True)
         shop_notes = ShopReview.objects.filter(
             shop=self, status=ShopReview.Status.VISIBLE

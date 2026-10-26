@@ -257,7 +257,57 @@ class BoutiqueRequestViewSet(viewsets.ModelViewSet):
         return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        from admin.models import PlatformSettings
+        from notification.models import Notification
+        from users.models import User
+
+        boutique = serializer.save(
+            owner=self.request.user,
+            status=BoutiqueRequest.Status.PENDING,
+        )
+        # La demande reste en attente jusqu'à l'action explicite d'un administrateur.
+        # Garder aussi le statut du compte vendeur cohérent avec celui de la demande.
+        owner = boutique.owner
+        if owner.shop_status != User.ShopStatus.PENDING:
+            owner.shop_status = User.ShopStatus.PENDING
+            owner.save(update_fields=["shop_status"])
+
+        settings = PlatformSettings.load()
+        if settings.notifications.get("newShopPending", False):
+            admins = User.objects.filter(role__in=("admin", "superadmin"))
+            Notification.objects.bulk_create([
+                Notification(
+                    user=admin,
+                    title="Nouvelle demande de boutique",
+                    message=f"La demande de boutique « {boutique.company_name} » attend une validation.",
+                    type=Notification.Type.SHOP,
+                )
+                for admin in admins
+            ])
+
+    @staticmethod
+    def _activate_shop_owner(boutique):
+        owner = boutique.owner
+        owner.role = User.Role.SELLER
+        owner.is_active = True
+        owner.shop_status = User.ShopStatus.VALIDATED
+        if boutique.company_name:
+            owner.shop_name = boutique.company_name
+        if boutique.phone:
+            owner.phone = boutique.phone
+        elif boutique.whatsapp:
+            owner.phone = boutique.whatsapp
+        if boutique.slogan:
+            owner.shop_description = boutique.slogan
+        if boutique.industry:
+            category = Category.objects.filter(name__iexact=boutique.industry).first()
+            if category is None:
+                category = Category.objects.filter(
+                    name__icontains=boutique.industry
+                ).first()
+            if category is not None:
+                owner.shop_category = category
+        owner.save()
 
     @action(detail=False, methods=["get"], url_path="my-request")
     def my_request(self, request):
@@ -286,30 +336,24 @@ class BoutiqueRequestViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["patch"], url_path="validate")
     def validate(self, request, pk=None):
         boutique = self.get_object()
+        was_pending = boutique.status == BoutiqueRequest.Status.PENDING
         boutique.status = BoutiqueRequest.Status.VALIDATED
         boutique.save(update_fields=["status"])
-
+        self._activate_shop_owner(boutique)
         owner = boutique.owner
-        owner.role = User.Role.SELLER
-        owner.is_active = True
-        owner.shop_status = User.ShopStatus.VALIDATED
-        if boutique.company_name:
-            owner.shop_name = boutique.company_name
-        if boutique.phone:
-            owner.phone = boutique.phone
-        elif boutique.whatsapp:
-            owner.phone = boutique.whatsapp
-        if boutique.slogan:
-            owner.shop_description = boutique.slogan
-        if boutique.industry:
-            category = Category.objects.filter(name__iexact=boutique.industry).first()
-            if category is None:
-                category = Category.objects.filter(
-                    name__icontains=boutique.industry
-                ).first()
-            if category is not None:
-                owner.shop_category = category
-        owner.save()
+
+        if was_pending:
+            from notification.models import Notification
+
+            Notification.objects.create(
+                user=owner,
+                title="Votre boutique a été validée",
+                message=(
+                    f"Votre demande de location pour « {boutique.company_name} » "
+                    "a été approuvée. Votre boutique est maintenant active."
+                ),
+                type=Notification.Type.SHOP,
+            )
 
         # Retourner aussi les infos utilisateur mises à jour pour que le front puisse rafraîchir la session
         from users.serializer import UserSerializer

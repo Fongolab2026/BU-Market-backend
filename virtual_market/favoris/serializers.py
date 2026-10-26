@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Favorite
+from .models import Favorite, Review
 
 
 class FavoriteSerializer(serializers.ModelSerializer):
@@ -56,7 +56,7 @@ class FavoriteSerializer(serializers.ModelSerializer):
 
 
 class ReviewSerializer(serializers.ModelSerializer):
-    """Avis publié sur un produit.
+    """Avis publié sur un produit (table `Review`).
 
     Lecture : publique quand la liste est filtrée par produit (`?product=`),
     sinon limitée à ses propres avis. Écriture : `note` (1-5) et `comment`
@@ -77,7 +77,7 @@ class ReviewSerializer(serializers.ModelSerializer):
     shopName = serializers.SerializerMethodField()
 
     class Meta:
-        model = Favorite
+        model = Review
         fields = [
             "id",
             "product",
