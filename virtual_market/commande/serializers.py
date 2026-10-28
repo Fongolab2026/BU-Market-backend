@@ -43,7 +43,7 @@ class ShopOrderItemSerializer(serializers.ModelSerializer):
 
 class ShopOrderSerializer(serializers.Serializer):
     """Sérialiseur pour les commandes du vendeur (shop-orders)."""
-    id = serializers.IntegerField()
+    id = serializers.IntegerField(source="order.id")
     client = serializers.CharField(source="order.user.username")
     location = serializers.CharField(source="order.user.adresse", default="")
     status = serializers.CharField(source="order.status")
