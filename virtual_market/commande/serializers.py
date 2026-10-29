@@ -1,4 +1,5 @@
 from django.core.files.storage import default_storage
+from decimal import Decimal
 from rest_framework import serializers
 from .models import Order, OrderItem
 
@@ -6,6 +7,11 @@ from .models import Order, OrderItem
 class OrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(read_only=True)
     subtotal = serializers.SerializerMethodField()
+    price = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+    )
 
     class Meta:
         model = OrderItem
@@ -81,7 +87,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["user"]
+        read_only_fields = ["user", "status"]
 
     def get_total_price(self, obj):
         return obj.total_price

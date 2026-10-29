@@ -49,6 +49,14 @@ class CartViewSet(viewsets.ModelViewSet):
             product = Product.objects.select_for_update().get(pk=product.pk)
             if product.status != Product.Status.ACTIVE:
                 raise ValidationError({"detail": "Ce produit n'est plus disponible."})
+            if (
+                not product.owner.is_active
+                or (
+                    product.owner.role == "seller"
+                    and product.owner.shop_status != "validated"
+                )
+            ):
+                raise ValidationError({"detail": "Le vendeur de ce produit n'est pas disponible."})
 
             item = CartItem.objects.select_for_update().filter(cart=cart, product=product).first()
             new_quantity = (item.quantity if item else 0) + quantity
@@ -81,7 +89,7 @@ class CartViewSet(viewsets.ModelViewSet):
             if cart is None:
                 raise ValidationError({"cart": ["Votre panier est vide."]})
             items = list(
-                cart.items.select_for_update().select_related("product").all()
+                cart.items.select_for_update().select_related("product__owner").all()
             )
             if not items:
                 raise ValidationError({"cart": ["Votre panier est vide."]})
@@ -99,6 +107,16 @@ class CartViewSet(viewsets.ModelViewSet):
                 if product.status != Product.Status.ACTIVE:
                     raise ValidationError(
                         {"cart": [f"Le produit « {product.name} » n'est plus disponible."]}
+                    )
+                if (
+                    not product.owner.is_active
+                    or (
+                        product.owner.role == "seller"
+                        and product.owner.shop_status != "validated"
+                    )
+                ):
+                    raise ValidationError(
+                        {"cart": [f"Le vendeur de « {product.name} » n'est plus disponible."]}
                     )
                 if item.quantity > product.stock:
                     raise ValidationError(

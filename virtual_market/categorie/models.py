@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils.text import slugify
+from django.conf import settings
 
 
 class Category(models.Model):
@@ -12,6 +13,13 @@ class Category(models.Model):
     image = models.ImageField(upload_to="categories/", blank=True, null=True)
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    managed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="managed_categories",
+    )
 
     class Meta:
         verbose_name = "Catégorie"

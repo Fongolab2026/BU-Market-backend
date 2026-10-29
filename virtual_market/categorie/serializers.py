@@ -16,6 +16,12 @@ class CategorySerializer(serializers.ModelSerializer):
     # de « désactivé », sinon créer une catégorie avec une image la créait
     # inactivée. `create`/`update` traitent ensuite la valeur nulle.
     active = serializers.BooleanField(required=False, allow_null=True, default=None)
+    ownerId = serializers.IntegerField(
+        source="managed_by_id",
+        read_only=True,
+        allow_null=True,
+    )
+    canManage = serializers.SerializerMethodField()
 
     class Meta:
         model = Category
@@ -28,10 +34,25 @@ class CategorySerializer(serializers.ModelSerializer):
             "image",
             "remove_image",
             "active",
+            "ownerId",
+            "canManage",
             "created_at",
             "count",
         ]
         read_only_fields = ["slug", "created_at", "count"]
+
+    def get_canManage(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_superuser or user.role in ("admin", "superadmin"):
+            return True
+        return (
+            user.role == "seller"
+            and user.shop_status == "validated"
+            and obj.managed_by_id == user.pk
+        )
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

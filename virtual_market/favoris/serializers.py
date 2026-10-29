@@ -73,6 +73,7 @@ class ReviewSerializer(serializers.ModelSerializer):
         trim_whitespace=True, min_length=3, max_length=2000
     )
     date = serializers.DateTimeField(source="created_at", read_only=True)
+    verified_purchase = serializers.BooleanField(read_only=True)
     shopId = serializers.IntegerField(source="product.owner_id", read_only=True)
     shopName = serializers.SerializerMethodField()
 
@@ -88,10 +89,11 @@ class ReviewSerializer(serializers.ModelSerializer):
             "comment",
             "date",
             "status",
+            "verified_purchase",
             "shopId",
             "shopName",
         ]
-        read_only_fields = ["status"]
+        read_only_fields = ["status", "verified_purchase"]
 
     def validate(self, attrs):
         # Un avis ne peut pas être basculé sur un autre produit après coup.

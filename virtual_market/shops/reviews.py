@@ -6,9 +6,10 @@ from rest_framework.response import Response
 
 from admin.pagination import AdminPageNumberPagination
 from notification.utils import notify_admins
+from commande.models import Order, OrderItem
 from users.permisions import IsAdminOrSuperAdmin
 
-from .models import ShopReview
+from .models import ShopReview, ShopReviewReport
 from .serializers import ShopReviewSerializer
 
 
@@ -58,9 +59,9 @@ class ShopReviewViewSet(viewsets.ModelViewSet):
         if shop:
             if not shop.isdigit():
                 return qs.none()
-            return qs.filter(status=ShopReview.Status.VISIBLE, shop=shop)
+            return qs.filter(status=ShopReview.Status.VISIBLE, shop=shop, verified_purchase=True)
         if self.action == "report":
-            return qs.filter(status=ShopReview.Status.VISIBLE)
+            return qs.filter(status=ShopReview.Status.VISIBLE, verified_purchase=True)
         if user.is_authenticated:
             return qs.filter(user=user)
         return qs.none()
@@ -72,21 +73,33 @@ class ShopReviewViewSet(viewsets.ModelViewSet):
             raise ValidationError("Vous ne pouvez pas noter votre propre boutique.")
         if ShopReview.objects.filter(user=user, shop=shop).exists():
             raise ValidationError("Vous avez déjà laissé un avis pour cette boutique.")
-        serializer.save(user=user, status=ShopReview.Status.VISIBLE)
+        if not OrderItem.objects.filter(
+            order__user=user,
+            order__status=Order.Status.COMPLETED,
+            seller=shop,
+        ).exists():
+            raise ValidationError("Un achat livré auprès de cette boutique est nécessaire pour publier un avis.")
+        serializer.save(user=user, status=ShopReview.Status.VISIBLE, verified_purchase=True)
 
     @action(detail=True, methods=["post"], url_path="report")
     def report(self, request, pk=None):
         review = self.get_object()
         if review.user_id == request.user.id:
             raise ValidationError("Vous ne pouvez pas signaler votre propre avis.")
-        notified = notify_admins(
-            title="Avis boutique signalé",
-            message=(
-                f"{request.user.username} a signalé l'avis de {review.user.username} "
-                f"sur la boutique « {review.shop.shop_display_name} » "
-                f"({review.stars}/5)."
-            ),
+        _report, created = ShopReviewReport.objects.get_or_create(
+            user=request.user,
+            review=review,
         )
+        notified = 0
+        if created:
+            notified = notify_admins(
+                title="Avis boutique signalé",
+                message=(
+                    f"{request.user.username} a signalé l'avis de {review.user.username} "
+                    f"sur la boutique « {review.shop.shop_display_name} » "
+                    f"({review.stars}/5)."
+                ),
+            )
         return Response(
             {
                 "hidden": False,

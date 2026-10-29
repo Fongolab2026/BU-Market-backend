@@ -31,12 +31,19 @@ class ProductsView(viewsets.ModelViewSet):
             user.is_superuser or user.role in ("admin", "superadmin")
         )
         if not is_admin:
-            # Catalogue public : uniquement les produits actifs. Un vendeur
-            # voit en plus ses propres produits, quel que soit leur statut.
+            # Le catalogue public ne montre que les produits actifs des
+            # boutiques validées. Un vendeur conserve l'accès à ses propres
+            # produits, même si sa boutique est suspendue.
+            public_products = Q(
+                status=Product.Status.ACTIVE,
+                owner__is_active=True,
+            ) & (
+                ~Q(owner__role="seller") | Q(owner__shop_status="validated")
+            )
             if user.is_authenticated:
-                qs = qs.filter(Q(status=Product.Status.ACTIVE) | Q(owner=user))
+                qs = qs.filter(public_products | Q(owner=user))
             else:
-                qs = qs.filter(status=Product.Status.ACTIVE)
+                qs = qs.filter(public_products)
         search = self.request.query_params.get("search")
         status_param = self.request.query_params.get("status")
         owner = self.request.query_params.get("owner")
@@ -54,6 +61,13 @@ class ProductsView(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
+        user = self.request.user
+        if user.role == "seller" and user.shop_status != "validated":
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied(
+                "Votre boutique doit être validée pour publier des produits."
+            )
         if serializer.validated_data.get("stock", 0) <= 0:
             from rest_framework.exceptions import ValidationError
             raise ValidationError({"stock": "Le stock doit être supérieur à zéro."})
@@ -231,6 +245,16 @@ class ProductsView(viewsets.ModelViewSet):
             )
         user = request.user
         is_admin = user.is_superuser or user.role in ("admin", "superadmin")
+        if (
+            new_status == Product.Status.ACTIVE
+            and not is_admin
+            and product.owner.shop_status != "validated"
+        ):
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied(
+                "Votre boutique doit être validée pour publier des produits."
+            )
         if new_status == Product.Status.ACTIVE and not is_admin:
             from admin.models import PlatformSettings
 

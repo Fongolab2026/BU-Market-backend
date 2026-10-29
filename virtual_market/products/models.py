@@ -1,4 +1,8 @@
+from decimal import Decimal
+
+from django.core.validators import MinValueValidator
 from django.db import models
+from django.db.models import Q
 from users.models import User
 from categorie.models import Category
 # Create your views here.
@@ -8,7 +12,11 @@ class Product(models.Model):
         INACTIVE = "inactive", "Inactive"
 
     name = models.CharField(max_length=100)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+    price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
     category = models.ForeignKey(
         Category,
         on_delete=models.PROTECT,
@@ -24,6 +32,14 @@ class Product(models.Model):
     )
     views = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(price__gt=0),
+                name="product_price_positive",
+            )
+        ]
 
     @property
     def date(self):

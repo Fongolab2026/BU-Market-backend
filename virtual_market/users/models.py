@@ -93,10 +93,10 @@ class User(AbstractUser):
         from shops.models import ShopReview
 
         product_notes = Review.objects.filter(
-            product__owner=self, status=Review.Status.VISIBLE
+            product__owner=self, status=Review.Status.VISIBLE, verified_purchase=True
         ).values_list("stars", flat=True)
         shop_notes = ShopReview.objects.filter(
-            shop=self, status=ShopReview.Status.VISIBLE
+            shop=self, status=ShopReview.Status.VISIBLE, verified_purchase=True
         ).values_list("stars", flat=True)
         return list(product_notes) + list(shop_notes)
 

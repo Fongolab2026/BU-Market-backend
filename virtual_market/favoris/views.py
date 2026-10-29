@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from users.permisions import IsAdminOrSuperAdmin
 from admin.pagination import AdminPageNumberPagination
 from notification.utils import notify_admins
+from commande.models import Order, OrderItem
 from .models import Favorite, Review, ReviewReport
 from .serializers import FavoriteSerializer, ReviewSerializer
 
@@ -85,7 +86,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
                 if not product.isdigit():
                     return qs.none()
                 # Vitrine : uniquement les avis visibles du produit demandé.
-                return qs.filter(status=Review.Status.VISIBLE, product=product)
+                return qs.filter(status=Review.Status.VISIBLE, product=product, verified_purchase=True)
             if user.is_authenticated:
                 # Sans filtre : « mes avis » (édition / suppression du sien).
                 return qs.filter(user=user)
@@ -93,7 +94,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
 
         if self.action == "report":
             # On signale un avis déjà publié (le sien est rejeté dans l'action).
-            return qs.filter(status=Review.Status.VISIBLE)
+            return qs.filter(status=Review.Status.VISIBLE, verified_purchase=True)
 
         # Écriture : uniquement ses propres avis, quel que soit le paramètre de
         # requête → 404 sur l'avis d'un autre auteur.
@@ -106,7 +107,13 @@ class ReviewViewSet(viewsets.ModelViewSet):
             raise ValidationError("Vous ne pouvez pas noter votre propre produit.")
         if Review.objects.filter(user=user, product=product).exists():
             raise ValidationError("Vous avez déjà laissé un avis pour ce produit.")
-        serializer.save(user=user, status=Review.Status.VISIBLE)
+        if not OrderItem.objects.filter(
+            order__user=user,
+            order__status=Order.Status.COMPLETED,
+            product=product,
+        ).exists():
+            raise ValidationError("Un achat livré est nécessaire pour publier un avis.")
+        serializer.save(user=user, status=Review.Status.VISIBLE, verified_purchase=True)
 
     @action(detail=True, methods=["post"], url_path="report")
     def report(self, request, pk=None):
@@ -122,7 +129,10 @@ class ReviewViewSet(viewsets.ModelViewSet):
         from admin.models import PlatformSettings
 
         platform = PlatformSettings.load()
-        should_hide = bool(platform.moderation.get("hideReportedReviews", False))
+        should_hide = (
+            bool(platform.moderation.get("hideReportedReviews", False))
+            and review.reports.count() >= 3
+        )
         if should_hide and review.status != Review.Status.HIDDEN:
             review.status = Review.Status.HIDDEN
             review.save(update_fields=["status"])
@@ -138,7 +148,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
             )
         return Response(
             {
-                "hidden": should_hide,
+                "hidden": review.status == Review.Status.HIDDEN,
                 "reported": True,
                 "notified": notified,
                 "detail": "Merci ! Notre équipe va examiner cet avis.",

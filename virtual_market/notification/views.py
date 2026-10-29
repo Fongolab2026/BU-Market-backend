@@ -25,11 +25,9 @@ class NotificationViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def get_queryset(self):
-        user = self.request.user
-        if user.role in ("superadmin", "admin"):
-            qs = Notification.objects.all()
-        else:
-            qs = Notification.objects.filter(user=user)
+        # Les indicateurs de lecture appartiennent à l'utilisateur ciblé.
+        # Même un admin ne doit pas lire/modifier les notifications des autres.
+        qs = Notification.objects.filter(user=self.request.user)
 
         is_read = self.request.query_params.get("is_read")
         if is_read is not None and is_read != "":

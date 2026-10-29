@@ -44,7 +44,10 @@ class ShopViewSet(viewsets.ReadOnlyModelViewSet):
             user.is_superuser or user.role in ("admin", "superadmin")
         )
         if not is_admin:
-            qs = qs.filter(shop_status=User.ShopStatus.VALIDATED)
+            qs = qs.filter(
+                shop_status=User.ShopStatus.VALIDATED,
+                is_active=True,
+            )
         search = self.request.query_params.get("search")
         shop_status = self.request.query_params.get("status")
         if search:
@@ -78,7 +81,13 @@ class ShopViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["patch"], url_path="status")
     def set_status(self, request, pk=None):
         shop = self.get_object()
-        shop.shop_status = request.data.get("status", shop.shop_status)
+        new_status = request.data.get("status", shop.shop_status)
+        if new_status not in User.ShopStatus.values:
+            return Response(
+                {"status": ["Statut de boutique invalide."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        shop.shop_status = new_status
         shop.save()
         return Response(self.get_serializer(shop).data)
 
@@ -114,7 +123,10 @@ class ShopViewSet(viewsets.ReadOnlyModelViewSet):
                 {"images": ["Au moins une photo du produit est obligatoire."]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        serializer = ProductSerializer(data=request.data)
+        serializer = ProductSerializer(
+            data=request.data,
+            context={"request": request},
+        )
         serializer.is_valid(raise_exception=True)
         if serializer.validated_data.get("stock", 0) <= 0:
             return Response(

@@ -35,6 +35,7 @@ class ShopReview(models.Model):
         choices=Status.choices,
         default=Status.VISIBLE,
     )
+    verified_purchase = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -45,6 +46,28 @@ class ShopReview(models.Model):
 
     def __str__(self):
         return f"{self.user.username} → {self.shop.shop_display_name} : {self.stars}/5"
+
+
+class ShopReviewReport(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="shop_review_reports",
+    )
+    review = models.ForeignKey(
+        ShopReview,
+        on_delete=models.CASCADE,
+        related_name="reports",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "review"),
+                name="unique_shop_review_report_per_user",
+            )
+        ]
 
 
 class BoutiqueRequest(models.Model):

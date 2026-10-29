@@ -1,5 +1,8 @@
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
+from django.core.validators import MinValueValidator
+from decimal import Decimal
 from products.models import Product
 
 
@@ -68,7 +71,19 @@ class OrderItem(models.Model):
     shop_name = models.CharField(max_length=150, blank=True, default="")
     product_image_key = models.CharField(max_length=500, blank=True, default="")
     quantity = models.PositiveIntegerField(default=1)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+    price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(price__gt=0),
+                name="order_item_price_positive",
+            )
+        ]
 
     def save(self, *args, **kwargs):
         if self.product_id:

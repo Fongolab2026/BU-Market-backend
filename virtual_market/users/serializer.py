@@ -1,5 +1,14 @@
 from rest_framework import serializers
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import User
+
+
+def _validate_password(password, user, field="password"):
+    try:
+        validate_password(password, user=user)
+    except DjangoValidationError as exc:
+        raise serializers.ValidationError({field: exc.messages}) from exc
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -88,6 +97,7 @@ class UserSerializer(serializers.ModelSerializer):
         if not password:
             raise serializers.ValidationError({"password": "Le mot de passe est requis."})
         user = User(**validated_data)
+        _validate_password(password, user)
         user.set_password(password)
         user.save()
         return user
@@ -245,6 +255,7 @@ class AdminUserSerializer(serializers.ModelSerializer):
         if not password:
             raise serializers.ValidationError({"password": "Le mot de passe est requis."})
         user = User(**validated_data)
+        _validate_password(password, user)
         user.set_password(password)
         user.save()
         return user
@@ -254,6 +265,7 @@ class AdminUserSerializer(serializers.ModelSerializer):
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         if password:
+            _validate_password(password, instance)
             instance.set_password(password)
         instance.save()
         return instance

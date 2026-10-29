@@ -7,6 +7,8 @@ from .models import User
 from rest_framework import viewsets, serializers, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import AuthenticationFailed
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.contrib.auth.password_validation import validate_password
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -167,9 +169,11 @@ class UserViewset(viewsets.ModelViewSet):
                 {"current_password": ["Le mot de passe actuel est incorrect."]},
                 status=400,
             )
-        if len(new) < 8:
+        try:
+            validate_password(new, user=request.user)
+        except DjangoValidationError as exc:
             return Response(
-                {"new_password": ["Le nouveau mot de passe doit contenir au moins 8 caractères."]},
+                {"new_password": exc.messages},
                 status=400,
             )
         if new == current:

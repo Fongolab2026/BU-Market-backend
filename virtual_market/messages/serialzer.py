@@ -22,6 +22,14 @@ class MessagesSerializer(serializers.ModelSerializer):
         # The sender is always the authenticated user, never taken from the payload.
         read_only_fields = ['id', 'sender', 'timestamp', 'is_read', 'is_edited', 'edited_at']
 
+    def get_fields(self):
+        fields = super().get_fields()
+        # The recipient can be selected when creating a message, but changing
+        # it later would silently redirect an existing conversation message.
+        if self.instance is not None:
+            fields['receiver'].read_only = True
+        return fields
+
     def validate_content(self, value):
         if not value.strip():
             raise serializers.ValidationError("Message content cannot be empty.")

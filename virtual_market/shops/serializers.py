@@ -148,6 +148,7 @@ class ShopSerializer(serializers.ModelSerializer):
         reviews = Review.objects.filter(
             product__owner=obj,
             status=Review.Status.VISIBLE,
+            verified_purchase=True,
         ).select_related("user", "product")[:5]
         return ReviewSerializer(reviews, many=True).data
 
@@ -163,6 +164,7 @@ class ShopReviewSerializer(serializers.ModelSerializer):
         trim_whitespace=True, min_length=3, max_length=2000
     )
     date = serializers.DateTimeField(source="created_at", read_only=True)
+    verified_purchase = serializers.BooleanField(read_only=True)
     shopId = serializers.IntegerField(source="shop.id", read_only=True)
     shopName = serializers.SerializerMethodField()
 
@@ -178,10 +180,11 @@ class ShopReviewSerializer(serializers.ModelSerializer):
             "comment",
             "date",
             "status",
+            "verified_purchase",
             "shopId",
             "shopName",
         ]
-        read_only_fields = ["status"]
+        read_only_fields = ["status", "verified_purchase"]
 
     def validate_shop(self, shop):
         if shop.role != User.Role.SELLER:

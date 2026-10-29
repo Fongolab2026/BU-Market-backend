@@ -15,6 +15,14 @@ class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
 
+    STATUS_TRANSITIONS = {
+        Order.Status.PENDING: {Order.Status.CONFIRMED, Order.Status.CANCELLED},
+        Order.Status.CONFIRMED: {Order.Status.SHIPPED},
+        Order.Status.SHIPPED: {Order.Status.COMPLETED},
+        Order.Status.COMPLETED: set(),
+        Order.Status.CANCELLED: set(),
+    }
+
     def get_queryset(self):
         user = self.request.user
         if user.is_superuser or user.role in ("admin", "superadmin"):
@@ -36,13 +44,17 @@ class OrderViewSet(viewsets.ModelViewSet):
     def set_status(self, request, pk=None):
         user = request.user
         is_admin = user.is_superuser or user.role in ("admin", "superadmin")
+        status_name = request.data.get("status")
+        if status_name not in Order.Status.values:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError({"status": "Statut de commande invalide."})
         
         # L'acheteur peut annuler sa propre commande si elle est encore pending
         if not is_admin:
             order = Order.objects.filter(pk=pk, user=user).first()
             if order:
-                # L'acheteur ne peut qu'annuler une commande en attente
-                status_name = request.data.get("status")
+                # Un acheteur ne peut annuler que sa commande encore en attente.
                 if status_name == Order.Status.CANCELLED and order.status == Order.Status.PENDING:
                     order = self._cancel_order(order)
                     return Response(OrderSerializer(order).data)
@@ -69,10 +81,20 @@ class OrderViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied(
                     "Cette commande concerne plusieurs boutiques. Seul un administrateur peut modifier son statut."
                 )
-        status_name = request.data.get("status")
-        if status_name and status_name not in Order.Status.values:
+
+        if status_name == order.status:
+            return Response(OrderSerializer(order).data)
+        if status_name not in self.STATUS_TRANSITIONS.get(order.status, set()):
             from rest_framework.exceptions import ValidationError
-            raise ValidationError({"status": "Statut de commande invalide."})
+
+            raise ValidationError(
+                {
+                    "status": (
+                        f"Transition impossible de « {order.status} » vers "
+                        f"« {status_name} »."
+                    )
+                }
+            )
         if status_name == Order.Status.CANCELLED and order.status != Order.Status.CANCELLED:
             order = self._cancel_order(order)
         else:

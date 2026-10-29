@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from decimal import Decimal
 from categorie.models import Category
 from .models import Product, ProductImage
 
@@ -31,6 +32,7 @@ class ProductSerializer(serializers.ModelSerializer):
     price = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
+        min_value=Decimal("0.01"),
         error_messages={"required": "Le prix est obligatoire.", "invalid": "Le prix doit être un nombre."},
     )
     stock = serializers.IntegerField(
@@ -47,6 +49,21 @@ class ProductSerializer(serializers.ModelSerializer):
             "incorrect_type": "Catégorie invalide.",
         },
     )
+
+    def validate_category(self, category):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if (
+            user
+            and user.is_authenticated
+            and user.role == "seller"
+            and category.managed_by_id is not None
+            and category.managed_by_id != user.pk
+        ):
+            raise serializers.ValidationError(
+                "Cette catégorie appartient à une autre boutique."
+            )
+        return category
 
     class Meta:
         model = Product
